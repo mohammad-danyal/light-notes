@@ -1,0 +1,907 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Stash | Stateless Session</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- fflate is used for fast, self-contained ZIP export/import -->
+    <script src="https://unpkg.com/fflate"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        dark: {
+                            bg: '#0f0f0f',
+                            sidebar: '#161616',
+                            card: '#1a1a1a',
+                            border: '#262626',
+                            hover: '#262626',
+                            text: '#d4d4d8',
+                            muted: '#71717a'
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style type="text/tailwindcss">
+        @import url('https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&family=JetBrains+Mono:wght@400;500&display=swap');
+
+        :root {
+            --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+            --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+            --sidebar-width: 18%;
+            --sidebar-min: 220px;
+            --sidebar-max: 280px;
+            --reading-width: 65ch;
+        }
+
+        * {
+            caret-color: #18181b;
+        }
+
+        .dark * {
+            caret-color: #f4f4f5;
+        }
+
+        body {
+            font-family: var(--font-sans);
+            @apply bg-zinc-50 text-zinc-800 transition-colors duration-200 dark:bg-dark-bg dark:text-dark-text;
+            -webkit-font-smoothing: antialiased;
+            font-size: clamp(0.875rem, 0.5vw + 0.75rem, 1rem);
+        }
+
+        .block {
+            @apply relative py-[0.2em] px-[0.4em] rounded transition-all duration-150 w-full leading-relaxed outline-none;
+        }
+        
+        .block:not(.block-code):not(.block-divider):hover {
+            @apply bg-zinc-200/40 dark:bg-zinc-800/40;
+        }
+
+        .block-h1 { 
+            font-size: clamp(1.8rem, 4vw, 2.5rem);
+            @apply font-bold mt-[1.2em] mb-[0.6em] tracking-tight text-zinc-900 dark:text-white; 
+        }
+        .block-h2 { 
+            font-size: clamp(1.4rem, 3vw, 1.8rem);
+            @apply font-semibold mt-[1em] mb-[0.4em] tracking-tight text-zinc-800 dark:text-zinc-100; 
+        }
+        .block-h3 { 
+            font-size: clamp(1.1rem, 2vw, 1.3rem);
+            @apply font-semibold mt-[0.8em] mb-[0.2em] tracking-tight text-zinc-700 dark:text-zinc-200; 
+        }
+        .block-quote { 
+            @apply border-l-[3px] border-zinc-200 dark:border-zinc-700 pl-[1.2em] text-zinc-500 dark:text-dark-muted italic my-[1.4em] text-[1.05em]; 
+        }
+
+        .block-divider {
+            @apply my-[2rem] py-0 px-0 h-[1px] bg-zinc-200 dark:bg-zinc-800 border-none cursor-default select-none transition-none !important;
+        }
+        
+        .block-bullet, .block-number, .block-todo {
+            display: grid !important;
+            grid-template-columns: 1.5em 1fr;
+            @apply items-start gap-[0.2em];
+        }
+
+        .block-marker {
+            @apply flex items-center justify-center h-[1.6em] select-none font-medium text-zinc-400 dark:text-zinc-500 text-[0.9em];
+        }
+
+        .custom-checkbox {
+            @apply appearance-none w-[1.1em] h-[1.1em] border border-zinc-300 dark:border-zinc-600 rounded-[3px] cursor-pointer transition-all duration-200 bg-transparent relative mt-[0.25em];
+        }
+        .custom-checkbox:checked {
+            @apply bg-zinc-900 border-zinc-900 dark:bg-zinc-100 dark:border-zinc-100;
+        }
+        .custom-checkbox:checked::after {
+            content: "✓";
+            @apply absolute text-white dark:text-zinc-950 text-[0.6em] font-black top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2;
+        }
+
+        .block-todo[data-checked="true"] .block-content {
+            @apply opacity-40;
+        }
+
+        .block-code {
+            @apply bg-zinc-900 dark:bg-black rounded-[0.6rem] my-[1.5em] p-0 overflow-hidden relative shadow-sm;
+        }
+        
+        .code-header {
+            @apply flex items-center justify-between px-[1em] py-[0.4em] bg-white/5 dark:bg-white/5 border-b border-white/10 select-none;
+        }
+
+        .lang-selector {
+            @apply text-[0.65rem] font-bold uppercase tracking-widest text-zinc-400 bg-transparent border-none outline-none cursor-pointer hover:text-white transition-colors;
+        }
+
+        .block-code .block-content {
+            @apply p-[1em] font-mono text-[0.85rem] font-medium leading-relaxed text-zinc-300 outline-none whitespace-pre;
+            font-family: var(--font-mono);
+            min-height: 1.5em;
+        }
+
+        #slash-menu {
+            position: fixed;
+            z-index: 9999;
+            @apply bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-dark-border rounded-[0.6rem] shadow-xl w-[16rem] max-h-[18rem] overflow-y-auto py-[0.4em] hidden;
+        }
+
+        .slash-item {
+            @apply flex items-center gap-[0.7em] px-[0.8em] py-[0.4em] cursor-pointer transition-colors;
+        }
+
+        .slash-item.selected, .slash-item:hover {
+            @apply bg-zinc-100 dark:bg-zinc-800;
+        }
+
+        #editor-title:empty::before {
+            content: attr(data-placeholder);
+            @apply text-zinc-200 dark:text-zinc-800 pointer-events-none absolute;
+        }
+
+        ::-webkit-scrollbar { width: 4px; height: 4px; }
+        ::-webkit-scrollbar-thumb { @apply bg-zinc-200 dark:bg-zinc-800 rounded-full; }
+
+        .modal-overlay {
+            @apply fixed inset-0 bg-zinc-900/10 backdrop-blur-[2px] z-[100] flex items-center justify-center opacity-0 pointer-events-none transition-all duration-200;
+        }
+        .modal-overlay.active {
+            @apply opacity-100 pointer-events-auto;
+        }
+        .modal-container {
+            @apply bg-white dark:bg-dark-card border border-zinc-200 dark:border-dark-border max-w-[28rem] w-[90%] rounded-[1rem] shadow-2xl p-[1.8em] transform scale-95 transition-transform duration-200;
+        }
+        .modal-overlay.active .modal-container {
+            @apply scale-100;
+        }
+
+        #finder-modal .modal-container, #diff-modal .modal-container {
+            @apply max-w-[32rem] p-0 overflow-hidden flex flex-col;
+            max-height: 70vh;
+        }
+
+        #diff-modal .modal-container {
+            @apply max-w-[98rem] w-[99vw] h-[96vh];
+        }
+
+        .diff-added { @apply bg-emerald-500/10 dark:bg-emerald-500/20 text-emerald-800 dark:text-emerald-300; }
+        .diff-removed { @apply bg-rose-500/10 dark:bg-rose-500/20 text-rose-800 dark:text-rose-300; }
+        .diff-line { @apply px-[1em] min-h-[1.5em] border-l-4 border-transparent flex items-start whitespace-pre; }
+        .diff-line-added { @apply border-l-emerald-500/50 diff-added; }
+        .diff-line-removed { @apply border-l-rose-500/50 diff-removed; }
+        .diff-line-empty { @apply opacity-10 select-none; }
+
+        .drag-over-item {
+            @apply bg-zinc-200 dark:bg-zinc-800 ring-[1.5px] ring-zinc-300 dark:ring-zinc-600 !important;
+        }
+
+        .sidebar-item-note, .sidebar-item-folder, .sidebar-item-static {
+            @apply flex items-center gap-[0.5em] px-[0.6em] py-[0.35em] rounded-[0.3rem] cursor-pointer transition-all select-none relative;
+        }
+
+        .section-label {
+            @apply text-[11px] uppercase tracking-wider text-zinc-400 dark:text-dark-muted font-semibold mt-[1.2em] mb-[0.4em] px-[0.6em] select-none;
+        }
+
+        .btn-sidebar-action {
+            @apply opacity-0 group-hover:opacity-100 p-[0.2em] text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-200 hover:bg-zinc-200/60 dark:hover:bg-dark-hover rounded transition-all duration-150 relative z-50;
+        }
+        
+        .btn-delete-item {
+            @apply opacity-0 group-hover:opacity-100 p-[0.2em] text-zinc-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-all duration-150 ml-auto pointer-events-auto flex items-center justify-center relative z-50;
+        }
+        
+        .scratchpad-badge {
+            @apply px-[0.4em] py-[0.1em] text-[10px] font-black bg-zinc-200/50 dark:bg-zinc-800/80 text-zinc-400 dark:text-zinc-500 rounded uppercase tracking-tighter;
+        }
+
+        #finder-results .result-item {
+            @apply flex flex-col gap-[0.1em] px-[1em] py-[0.7em] cursor-pointer border-b border-zinc-100 dark:border-dark-border last:border-0 hover:bg-zinc-50 dark:hover:bg-dark-hover transition-colors;
+        }
+        #finder-results .result-item.selected {
+            @apply bg-zinc-100 dark:bg-zinc-800/80;
+        }
+
+        .session-badge {
+            @apply bg-zinc-100 dark:bg-zinc-800 text-zinc-400 dark:text-zinc-500 text-[10px] px-2 py-0.5 rounded font-bold uppercase tracking-widest border border-zinc-200 dark:border-zinc-700;
+        }
+
+        .made-by {
+            @apply text-[9px] font-medium opacity-30 select-none tracking-tight;
+        }
+
+        /* Enclosed Notice Box */
+        .notice-box {
+            @apply m-2 p-3 border border-zinc-200 dark:border-zinc-800 rounded-lg bg-zinc-100/50 dark:bg-zinc-800/20 transition-colors;
+        }
+    </style>
+<link rel="stylesheet" href="/index.css">
+</head>
+<body class="antialiased selection:bg-zinc-200 dark:selection:bg-zinc-800">
+    <div id="app" class="flex h-screen w-full overflow-hidden">
+        <!-- Sidebar -->
+        <aside id="sidebar" class="w-[var(--sidebar-width)] min-w-[var(--sidebar-min)] max-w-[var(--sidebar-max)] bg-zinc-50 dark:bg-dark-sidebar border-r border-zinc-200/60 dark:border-dark-border flex flex-col px-[0.6rem] py-[1.8rem] select-none overflow-hidden shrink-0">
+            <div class="px-[0.6rem] mb-[1.2rem] flex items-center justify-between">
+                <span class="font-bold text-zinc-900 dark:text-white tracking-tight flex items-center gap-[0.4em]">
+                    <span class="text-[1.1rem]">📓</span> Stash
+                </span>
+                <div class="flex items-center gap-[0.15em]">
+                    <button id="btn-new-folder" class="p-[0.35rem] hover:bg-zinc-200/60 dark:hover:bg-dark-hover rounded-[0.35rem] text-zinc-400 dark:text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200 transition" title="New Folder">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="1.1rem" height="1.1rem" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"/><line x1="12" y1="10" x2="12" y2="16"/><line x1="9" y1="13" x2="15" y2="13"/></svg>
+                    </button>
+                    <button id="btn-new-note" class="p-[0.35rem] hover:bg-zinc-200/60 dark:hover:bg-dark-hover rounded-[0.35rem] text-zinc-400 dark:text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200 transition" title="New Note">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="1.1rem" height="1.1rem" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                    </button>
+                </div>
+            </div>
+            
+            <div id="tree-container" class="flex-1 overflow-y-auto px-[0.2rem] pb-[0.8rem]">
+                <!-- Sidebar Tree Items -->
+            </div>
+
+            <!-- In-Memory Data Warning Notice Enclosed Box -->
+            <div class="mt-auto pt-2 border-t border-zinc-200/40 dark:border-zinc-800">
+                <div class="notice-box">
+                    <p class="text-[10px] text-zinc-400 dark:text-zinc-500 leading-tight">
+                        Data is stored only in RAM. Refreshing will clear all notes.
+                    </p>
+                    <button id="sidebar-export-hint" class="mt-2 text-[10px] font-black uppercase text-[#2383e2] dark:text-[#3e9eff] hover:underline">
+                        Export ZIP to save →
+                    </button>
+                </div>
+            </div>
+
+            <div class="pt-1 pb-4 px-[0.2rem]">
+                <button id="btn-settings" class="flex items-center gap-[0.6em] w-full px-[0.6rem] py-[0.4rem] text-[0.8rem] text-zinc-500 dark:text-dark-muted hover:bg-zinc-200/60 dark:hover:bg-dark-hover rounded-[0.35rem] transition font-medium">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="1.1rem" height="1.1rem" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.1a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
+                    Settings
+                </button>
+            </div>
+        </aside>
+
+        <!-- Main Editor -->
+        <main class="flex-1 flex flex-col bg-white dark:bg-dark-bg overflow-hidden relative">
+            <header class="h-[3rem] flex items-center justify-between px-[2rem] border-b border-zinc-200/40 dark:border-dark-border bg-white/80 dark:bg-dark-bg/80 backdrop-blur-md z-10">
+                <div id="breadcrumbs" class="font-medium text-zinc-400 dark:text-dark-muted text-[0.7rem] truncate max-w-[40vw] uppercase tracking-wider">Stash / Welcome</div>
+                <div class="flex items-center gap-[1rem]">
+                    <div class="session-badge">Session Only</div>
+                    <div id="save-status" class="flex items-center gap-[0.4em] text-[10px] font-bold uppercase tracking-tight text-zinc-300 dark:text-zinc-600">
+                        <span id="save-icon" class="w-[0.35rem] h-[0.35rem] rounded-full bg-zinc-200 dark:bg-zinc-800"></span>
+                        <span id="save-text">In-Memory</span>
+                    </div>
+                    <button id="btn-delete-active" class="text-zinc-300 dark:text-zinc-600 hover:text-red-500 dark:hover:text-red-400 transition-colors p-[0.35rem] rounded-[0.35rem] hover:bg-red-50 dark:hover:bg-red-900/10" title="Delete Current Note">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="1rem" height="1rem" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
+                    </button>
+                </div>
+            </header>
+            
+            <div id="editor-canvas" class="flex-1 overflow-y-auto cursor-text py-[6vh]">
+                <div id="editor-card" class="mx-auto w-full max-w-[var(--reading-width)] px-[5%] min-h-full">
+                    <div id="editor-title" contenteditable="true" data-placeholder="Untitled" class="w-full text-[clamp(1.8rem,4vw,2.5rem)] font-extrabold tracking-tight text-zinc-900 dark:text-white outline-none mb-[1.5em]"></div>
+                    <div id="blocks-container" class="space-y-[0.1em] pb-[10vh]">
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Quick Finder Modal -->
+    <div id="finder-modal" class="modal-overlay">
+        <div class="modal-container">
+            <div class="p-[1rem] border-b border-zinc-100 dark:border-dark-border">
+                <input type="text" id="finder-input" placeholder="Search notes..." class="w-full bg-transparent outline-none text-[1.2rem] text-zinc-900 dark:text-white font-medium" autocomplete="off">
+            </div>
+            <div id="finder-results" class="flex-1 overflow-y-auto"></div>
+            <div class="p-[0.6rem] bg-zinc-50 dark:bg-zinc-900 border-t border-zinc-100 dark:border-dark-border text-[10px] uppercase tracking-widest text-zinc-400 font-bold flex justify-between">
+                <span>↑↓ Navigate</span>
+                <span>Enter Select</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Diff Modal -->
+    <div id="diff-modal" class="modal-overlay">
+        <div class="modal-container">
+            <div class="flex items-center justify-between p-[1.2rem] border-b border-zinc-100 dark:border-dark-border">
+                <h2 class="text-[1rem] font-bold dark:text-white">Diff Engine</h2>
+                <div class="flex gap-[0.8rem]">
+                    <button id="btn-insert-summary" class="text-[0.7rem] font-bold uppercase px-[0.6rem] py-[0.3rem] bg-zinc-100 dark:bg-zinc-800 rounded hover:bg-zinc-200 transition">Summary</button>
+                    <button id="btn-insert-diff" class="text-[0.7rem] font-bold uppercase px-[0.6rem] py-[0.3rem] bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-950 rounded hover:opacity-90 transition">Insert Patch</button>
+                    <button id="btn-close-diff" class="p-[0.3rem] text-zinc-400 hover:text-zinc-600 transition"><svg xmlns="http://www.w3.org/2000/svg" width="1.2rem" height="1.2rem" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+                </div>
+            </div>
+            <div class="h-[30%] flex overflow-hidden border-b border-zinc-100 dark:border-dark-border">
+                <div class="w-1/2 flex flex-col border-r border-zinc-100 dark:border-dark-border">
+                    <textarea id="diff-input-left" class="flex-1 w-full bg-transparent p-[1rem] outline-none font-mono text-[0.85rem] leading-relaxed resize-none dark:text-zinc-300" placeholder="Source A..."></textarea>
+                </div>
+                <div class="w-1/2 flex flex-col">
+                    <textarea id="diff-input-right" class="flex-1 w-full bg-transparent p-[1rem] outline-none font-mono text-[0.85rem] leading-relaxed resize-none dark:text-zinc-300" placeholder="Source B..."></textarea>
+                </div>
+            </div>
+            <div class="flex-1 flex overflow-hidden bg-zinc-50 dark:bg-zinc-900/50">
+                 <div id="diff-visual-left" class="w-1/2 overflow-y-auto font-mono text-[0.8rem] leading-relaxed border-r border-zinc-200 dark:border-dark-border"></div>
+                 <div id="diff-visual-right" class="w-1/2 overflow-y-auto font-mono text-[0.8rem] leading-relaxed"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Settings Modal -->
+    <div id="settings-modal" class="modal-overlay">
+        <div class="modal-container">
+            <div class="flex items-center justify-between mb-[1.8rem]">
+                <h2 class="text-[1.1rem] font-bold dark:text-white">Stash Settings</h2>
+                <button id="btn-close-settings" class="p-[0.4rem] hover:bg-zinc-100 dark:hover:bg-dark-hover rounded-[0.4rem] text-zinc-400 dark:text-zinc-500">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="1.1rem" height="1.1rem" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                </button>
+            </div>
+
+            <div class="space-y-[1.2rem]">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <div class="font-semibold text-[0.9rem] dark:text-zinc-200">Dark Mode</div>
+                        <div class="text-[0.75rem] text-zinc-500 dark:text-dark-muted">Toggle between themes</div>
+                    </div>
+                    <button id="theme-toggle" class="relative inline-flex h-[1.4rem] w-[2.6rem] items-center rounded-full transition-colors bg-zinc-200 dark:bg-zinc-700">
+                        <span class="inline-block h-[1rem] w-[1rem] transform rounded-full bg-white transition-transform translate-x-[0.2rem] dark:translate-x-[1.4rem]"></span>
+                    </button>
+                </div>
+                <hr class="border-zinc-100 dark:border-dark-border">
+                <div class="space-y-[0.8rem] text-center">
+                    <p class="text-[0.65rem] uppercase tracking-widest text-zinc-400 dark:text-zinc-600 font-bold mb-[0.4em]">Mandatory Persistence</p>
+                    <p class="text-[11px] text-zinc-400 mb-4 px-2 italic">Data is not saved by the browser. You must export to keep your work.</p>
+                    <div class="grid grid-cols-2 gap-[0.6rem]">
+                        <!-- Visual style: Export is dark/outlined in dark mode, Import is white/filled -->
+                        <button id="btn-export" class="flex items-center justify-center gap-[0.4em] py-[0.5rem] bg-zinc-900 text-white border border-transparent dark:bg-transparent dark:border-zinc-700 dark:text-zinc-300 dark:hover:border-zinc-500 rounded-[0.6rem] font-bold transition hover:opacity-90">Export ZIP</button>
+                        <button id="btn-trigger-import" class="flex items-center justify-center gap-[0.4em] py-[0.5rem] bg-white text-zinc-900 border border-zinc-200 dark:bg-zinc-100 dark:border-zinc-100 rounded-[0.6rem] font-bold transition hover:bg-zinc-50 dark:hover:bg-white">Import ZIP</button>
+                    </div>
+                    <input type="file" id="import-input" class="hidden" accept=".zip">
+                </div>
+            </div>
+            <div class="mt-[2.5rem] text-center text-[10px] uppercase tracking-widest text-zinc-400 dark:text-zinc-700 font-black">Stateless Stash v1.2 • Made by Danyal</div>
+        </div>
+    </div>
+
+    <div id="slash-menu"></div>
+
+    <script type="module">
+        /**
+         * STATELESS DATA MODEL
+         * This application intentionally avoids all browser-based persistence (IndexedDB, LocalStorage, etc.)
+         * All data resides in memory during the active browser session.
+         * The only way to persist data is through an explicit user action (Export ZIP).
+         */
+        const Stash = {
+            notes: [],
+            folders: [],
+            activeNoteId: null,
+            editingFolderId: null,
+            saveTimer: null,
+            isDirty: false, // Tracks unsaved session changes
+
+            async init() {
+                // No storage initialization. Start with a clean slate.
+                const welcomeNote = {
+                    id: crypto.randomUUID(),
+                    title: "Welcome to Stash",
+                    body: "# Getting Started\n\nThis is a purely in-memory workspace. \n\n1. Use `/` to insert blocks.\n2. **Important**: Nothing is saved automatically.\n3. Export to ZIP before closing the tab.\n\nHappy writing!",
+                    updatedAt: Date.now(),
+                    folderId: null
+                };
+                this.notes.push(welcomeNote);
+                await this.openNote(welcomeNote.id);
+                ui.renderSidebar();
+                
+                // Warn user before they lose data
+                window.addEventListener('beforeunload', (e) => {
+                    if (this.isDirty) {
+                        e.preventDefault();
+                        e.returnValue = '';
+                    }
+                });
+            },
+
+            async openNote(id) {
+                const note = this.notes.find(n => n.id === id);
+                if (!note) return;
+                this.activeNoteId = id;
+                document.getElementById("editor-title").innerText = note.title || "";
+                document.getElementById("editor-title").contentEditable = "true";
+                editor.loadMarkdown(note.body || "");
+                ui.renderSidebar();
+                ui.renderBreadcrumbs(note);
+            },
+
+            async createNewNote(folderId = null) {
+                const id = crypto.randomUUID();
+                const note = { id, title: "", body: "", updatedAt: Date.now(), folderId };
+                this.notes.push(note);
+                this.isDirty = true;
+                await this.openNote(id);
+                ui.renderSidebar();
+            },
+
+            async createNewFolder(parentId = null) {
+                const id = crypto.randomUUID();
+                const folder = { id, name: "", parentId, expanded: true, isNew: true };
+                this.folders.push(folder);
+                this.isDirty = true;
+                ui.renderSidebar();
+                setTimeout(() => {
+                    const input = document.querySelector(`input[data-id="${id}"]`);
+                    if (input) input.focus();
+                }, 100);
+            },
+
+            async finalizeFolder(id, name) {
+                const folder = this.folders.find(f => f.id === id);
+                if (!folder) return;
+                this.editingFolderId = null; 
+                if (!name.trim() && folder.isNew) {
+                    this.folders = this.folders.filter(f => f.id !== id);
+                } else {
+                    folder.name = name.trim() || "Untitled Folder";
+                    delete folder.isNew;
+                    this.isDirty = true;
+                }
+                ui.renderSidebar();
+            },
+
+            async deleteNote(id) {
+                if (!id) return;
+                const wasActive = this.activeNoteId === id;
+                this.notes = this.notes.filter(n => n.id !== id);
+                this.isDirty = true;
+                if (wasActive) {
+                    if (this.notes.length > 0) await this.openNote(this.notes[0].id);
+                    else await this.createNewNote();
+                }
+                ui.renderSidebar();
+            },
+
+            async deleteFolder(id) {
+                const foldersToDelete = [id];
+                const notesToDelete = [];
+                const collect = (fid) => {
+                    this.notes.filter(n => n.folderId === fid).forEach(n => notesToDelete.push(n.id));
+                    this.folders.filter(f => f.parentId === fid).forEach(sf => {
+                        foldersToDelete.push(sf.id);
+                        collect(sf.id);
+                    });
+                };
+                collect(id);
+                this.notes = this.notes.filter(n => !notesToDelete.includes(n.id));
+                this.folders = this.folders.filter(f => !foldersToDelete.includes(f.id));
+                this.isDirty = true;
+                if (notesToDelete.includes(this.activeNoteId)) {
+                    if (this.notes.length > 0) await this.openNote(this.notes[0].id);
+                    else await this.createNewNote();
+                }
+                ui.renderSidebar();
+            },
+
+            async saveCurrent() {
+                if (!this.activeNoteId) return;
+                if (this.saveTimer) clearTimeout(this.saveTimer);
+                ui.setSaveStatus("Pending...");
+                this.saveTimer = setTimeout(() => {
+                    const note = this.notes.find(n => n.id === this.activeNoteId);
+                    if (!note) return;
+                    note.title = document.getElementById("editor-title").innerText || "";
+                    note.body = editor.getMarkdown();
+                    note.updatedAt = Date.now();
+                    this.isDirty = true;
+                    ui.renderSidebar();
+                    ui.setSaveStatus("In-Memory");
+                }, 800);
+            },
+
+            async moveItem(itemId, targetFolderId, type) {
+                if (itemId === targetFolderId) return;
+                if (type === 'note') {
+                    const note = this.notes.find(n => n.id === itemId);
+                    if (note) { note.folderId = targetFolderId; this.isDirty = true; }
+                } else if (type === 'folder') {
+                    const folder = this.folders.find(f => f.id === itemId);
+                    if (folder) {
+                        let curr = targetFolderId;
+                        while (curr) {
+                            if (curr === itemId) return;
+                            const p = this.folders.find(f => f.id === curr);
+                            curr = p ? p.parentId : null;
+                        }
+                        folder.parentId = targetFolderId;
+                        this.isDirty = true;
+                    }
+                }
+                ui.renderSidebar();
+            },
+
+            /**
+             * EXPORT MECHANISM: The only way to save data permanently.
+             */
+            async exportToZip() {
+                const zipData = {
+                    "index.json": fflate.strToU8(JSON.stringify({
+                        notes: this.notes,
+                        folders: this.folders,
+                        exportDate: new Date().toISOString()
+                    }))
+                };
+                
+                // Export markdown files for readability
+                this.notes.forEach(note => {
+                    const filename = `${(note.title || "untitled").replace(/[^a-z0-9]/gi, '_').toLowerCase()}.md`;
+                    zipData[filename] = fflate.strToU8(note.body || "");
+                });
+
+                const zipped = fflate.zipSync(zipData);
+                const blob = new Blob([zipped], { type: 'application/zip' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `Stash_backup_${new Date().toISOString().slice(0, 10)}.zip`;
+                a.click();
+                
+                this.isDirty = false;
+                ui.setSaveStatus("Backed Up");
+            },
+
+            async importFromZip(file) {
+                const reader = new FileReader();
+                reader.onload = async (e) => {
+                    const buf = new Uint8Array(e.target.result);
+                    const unzipped = fflate.unzipSync(buf);
+                    const indexFile = unzipped["index.json"];
+                    if (indexFile) {
+                        const data = JSON.parse(fflate.strFromU8(indexFile));
+                        this.notes = data.notes || [];
+                        this.folders = data.folders || [];
+                        if (this.notes.length > 0) await this.openNote(this.notes[0].id);
+                        this.isDirty = false;
+                        ui.renderSidebar();
+                        ui.setSaveStatus("Imported");
+                    }
+                };
+                reader.readAsArrayBuffer(file);
+            }
+        };
+
+        const editor = {
+            commands: [
+                { bType: 'p', icon: '¶', title: 'Text', desc: 'Plain text' },
+                { bType: 'h1', icon: 'H1', title: 'Heading 1', desc: 'Large title' },
+                { bType: 'h2', icon: 'H2', title: 'Heading 2', desc: 'Medium section' },
+                { bType: 'bullet', icon: '•', title: 'Bullet list', desc: 'Simple list' },
+                { bType: 'todo', icon: '☑', title: 'To-do list', desc: 'Tasks' },
+                { bType: 'divider', icon: '—', title: 'Divider', desc: 'Section break' },
+                { bType: 'code', icon: '</>', title: 'Code', desc: 'Monospaced block' }
+            ],
+            menuVisible: false, menuSelectedIndex: 0, activeBlock: null,
+
+            init() {
+                const container = document.getElementById("blocks-container");
+                const title = document.getElementById("editor-title");
+                const canvas = document.getElementById("editor-canvas");
+                
+                canvas.addEventListener('mousedown', (e) => {
+                    const isWhitespace = e.target === canvas || e.target.id === 'editor-card';
+                    if (isWhitespace) {
+                        const lastBlock = container.lastElementChild;
+                        if (lastBlock) {
+                            const content = lastBlock.querySelector('.block-content') || lastBlock;
+                            if (content && content.focus) { e.preventDefault(); content.focus(); this.placeCursorAtEnd(content); }
+                        } else { e.preventDefault(); this.createNewBlockAfter(null); }
+                    }
+                });
+
+                title.oninput = () => Stash.saveCurrent();
+                title.onkeydown = (e) => { 
+                    if (e.key === "Enter") { e.preventDefault(); this.createNewBlockAfter(null); }
+                    if (e.key === "ArrowDown") {
+                        e.preventDefault();
+                        const firstBlock = container.firstElementChild;
+                        if (firstBlock) {
+                            const c = firstBlock.querySelector('.block-content') || firstBlock;
+                            if (c.focus) c.focus();
+                        }
+                    }
+                };
+                
+                container.addEventListener('input', (e) => {
+                    const block = e.target.closest('.block');
+                    if (!block) return;
+                    const c = block.querySelector('.block-content') || block;
+                    if (c.innerText && c.innerText.startsWith('[] ')) {
+                        c.innerText = c.innerText.slice(3);
+                        this.transformBlock(block, 'todo');
+                        return;
+                    }
+                    Stash.saveCurrent();
+                });
+
+                container.onkeydown = (e) => {
+                    const block = e.target.closest('.block');
+                    if (!block) return;
+                    const contentArea = block.querySelector('.block-content') || block;
+
+                    if (this.menuVisible) {
+                        if (e.key === "ArrowDown") { e.preventDefault(); this.menuSelectedIndex = (this.menuSelectedIndex + 1) % this.commands.length; this.renderMenu(); return; }
+                        if (e.key === "ArrowUp") { e.preventDefault(); this.menuSelectedIndex = (this.menuSelectedIndex - 1 + this.commands.length) % this.commands.length; this.renderMenu(); return; }
+                        if (e.key === "Enter") {
+                            e.preventDefault();
+                            const cmd = this.commands[this.menuSelectedIndex];
+                            if (this.activeBlock) {
+                                const c = this.activeBlock.querySelector('.block-content') || this.activeBlock;
+                                if (c.innerText) c.innerText = c.innerText.replace("/", "");
+                                this.transformBlock(this.activeBlock, cmd.bType);
+                            }
+                            this.hideMenu();
+                            return;
+                        }
+                        if (e.key === "Escape") { e.preventDefault(); this.hideMenu(); return; }
+                    }
+                    
+                    if (e.key === "Enter" && !e.shiftKey) {
+                        if (block.dataset.blockType === 'code') return;
+                        e.preventDefault();
+                        const bType = block.dataset.blockType;
+                        const isList = ['bullet', 'todo'].includes(bType);
+                        if (isList && contentArea.innerText.trim() === "") this.transformBlock(block, "p");
+                        else this.createNewBlockAfter(block, isList ? bType : 'p');
+                    }
+                    if (e.key === "Backspace" && contentArea.innerText.trim() === "") {
+                        if (block.dataset.blockType !== "p") { e.preventDefault(); this.transformBlock(block, "p"); }
+                        else {
+                            const prev = block.previousElementSibling;
+                            if (prev) { e.preventDefault(); block.remove(); const pc = prev.querySelector('.block-content') || prev; if (pc.focus) pc.focus(); if (pc.innerText) this.placeCursorAtEnd(pc); Stash.saveCurrent(); }
+                        }
+                    }
+                    if (e.key === "ArrowUp") {
+                        const prev = block.previousElementSibling;
+                        if (prev) { e.preventDefault(); const pc = prev.querySelector('.block-content') || prev; if (pc.focus) pc.focus(); this.placeCursorAtEnd(pc); }
+                        else { e.preventDefault(); title.focus(); this.placeCursorAtEnd(title); }
+                    }
+                    if (e.key === "ArrowDown") {
+                        const next = block.nextElementSibling;
+                        if (next) { e.preventDefault(); const nc = next.querySelector('.block-content') || next; if (nc.focus) nc.focus(); }
+                    }
+                    if (e.key === "/") { this.activeBlock = block; this.menuSelectedIndex = 0; setTimeout(() => this.showSlashMenu(), 10); }
+                };
+            },
+            showSlashMenu() { this.menuVisible = true; this.renderMenu(); },
+            hideMenu() { document.getElementById("slash-menu").style.display = "none"; this.menuVisible = false; },
+            renderMenu() {
+                const menu = document.getElementById("slash-menu");
+                const sel = window.getSelection();
+                if (sel && sel.rangeCount > 0) {
+                    const rect = sel.getRangeAt(0).getBoundingClientRect();
+                    menu.style.top = `${rect.bottom + window.scrollY + 8}px`;
+                    menu.style.left = `${rect.left + window.scrollX}px`;
+                }
+                menu.style.display = "block"; menu.innerHTML = "";
+                this.commands.forEach((cmd, idx) => {
+                    const item = document.createElement("div");
+                    item.className = `slash-item ${idx === this.menuSelectedIndex ? 'selected' : ''}`;
+                    item.innerHTML = `<div class="w-[2em] h-[2em] rounded border dark:border-zinc-700 flex items-center justify-center bg-zinc-50 dark:bg-zinc-800 font-bold text-[0.7rem]">${cmd.icon}</div>
+                        <div class="flex flex-col"><span class="text-[0.85rem] font-semibold dark:text-zinc-200">${cmd.title}</span><span class="text-[0.65rem] text-zinc-400 dark:text-zinc-500">${cmd.desc}</span></div>`;
+                    item.onclick = (e) => {
+                        e.stopPropagation();
+                        if (this.activeBlock) {
+                            const c = this.activeBlock.querySelector('.block-content') || this.activeBlock;
+                            if (c.innerText) c.innerText = c.innerText.replace("/", "");
+                            this.transformBlock(this.activeBlock, cmd.bType);
+                        }
+                        this.hideMenu();
+                    };
+                    menu.appendChild(item);
+                });
+            },
+            transformBlock(block, bType) {
+                const c = block.querySelector('.block-content') || block;
+                const newEl = this.createBlock(bType, c.innerText || "", block);
+                block.remove(); 
+                if (newEl) { newEl.focus(); this.placeCursorAtEnd(newEl); }
+                Stash.saveCurrent();
+            },
+            createBlock(bType, content = "", afterEl = null, extra = {}) {
+                const b = document.createElement("div"); 
+                b.className = `block block-${bType}`; b.dataset.blockType = bType;
+                
+                if (bType === 'divider') {
+                    b.contentEditable = "false";
+                    if (afterEl) afterEl.after(b); else document.getElementById("blocks-container").appendChild(b);
+                    return null;
+                }
+
+                if (['bullet', 'todo', 'code'].includes(bType)) {
+                    if (bType === 'code') {
+                        b.innerHTML = `<div class="code-header" contenteditable="false"><select class="lang-selector">${['General', 'JavaScript', 'Python', 'Java', 'HTML', 'CSS'].map(l => `<option value="${l.toLowerCase()}">${l}</option>`).join('')}</select></div><div class="block-content outline-none" contenteditable="true" spellcheck="false"></div>`;
+                        const c = b.querySelector('.block-content'); c.innerText = content;
+                    } else {
+                        const m = document.createElement("div"); m.className = "block-marker"; m.contentEditable = "false";
+                        if (bType === 'bullet') m.innerText = "•";
+                        else if (bType === 'todo') {
+                            const cb = document.createElement("input"); cb.type = "checkbox"; cb.className = "custom-checkbox"; 
+                            cb.onchange = () => { b.dataset.checked = cb.checked; Stash.saveCurrent(); };
+                            if (content.startsWith('[x] ')) { cb.checked = true; content = content.slice(4); b.dataset.checked = "true"; }
+                            m.appendChild(cb);
+                        }
+                        b.appendChild(m);
+                        const c = document.createElement("div"); c.className = "block-content outline-none"; c.contentEditable = "true"; c.innerText = content;
+                        b.appendChild(c);
+                    }
+                } else { b.contentEditable = "true"; b.innerText = content; }
+                if (afterEl) afterEl.after(b); else document.getElementById("blocks-container").appendChild(b);
+                return bType === 'code' ? b.querySelector('.block-content') : (['bullet', 'todo'].includes(bType) ? b.lastElementChild : b);
+            },
+            createNewBlockAfter(block, bType = 'p') { const n = this.createBlock(bType, "", block); if (n) n.focus(); Stash.saveCurrent(); },
+            loadMarkdown(md) {
+                const container = document.getElementById("blocks-container"); container.innerHTML = "";
+                if (!md?.trim()) { this.createBlock('p'); return; }
+                const lines = md.split('\n'); let i = 0;
+                while (i < lines.length) {
+                    let line = lines[i]; if (line.trim() === "") { i++; continue; }
+                    let type = 'p', content = line;
+                    if (line.startsWith('```')) {
+                        type = 'code'; i++; let code = [];
+                        while (i < lines.length && !lines[i].startsWith('```')) code.push(lines[i++]);
+                        content = code.join('\n'); this.createBlock(type, content); i++; continue;
+                    }
+                    if (line.startsWith('---')) { type = 'divider'; this.createBlock(type); i++; continue; }
+                    if (line.startsWith('# ')) { type = 'h1'; content = line.slice(2); }
+                    else if (line.startsWith('## ')) { type = 'h2'; content = line.slice(3); }
+                    else if (line.trim().startsWith('- [ ] ') || line.trim().startsWith('- [x] ')) { 
+                        type = 'todo'; 
+                        content = line.trim().startsWith('- [x] ') ? '[x] ' + line.trim().slice(6) : '[ ] ' + line.trim().slice(6); 
+                    }
+                    else if (line.trim().startsWith('- ')) { type = 'bullet'; content = line.trim().slice(2); }
+                    else if (line.startsWith('> ')) { type = 'quote'; content = line.slice(2); }
+                    this.createBlock(type, content); i++;
+                }
+                if (!container.children.length) this.createBlock('p');
+            },
+            getMarkdown() {
+                const blocks = Array.from(document.querySelectorAll(".block")); let md = "";
+                blocks.forEach((b, idx) => {
+                    const contentEl = b.querySelector('.block-content') || b;
+                    const c = contentEl.innerText || "";
+                    const t = b.dataset.blockType; let line = c;
+                    if (t === 'h1') line = '# ' + c;
+                    else if (t === 'h2') line = '## ' + c;
+                    else if (t === 'bullet') line = '- ' + c;
+                    else if (t === 'todo') line = (b.querySelector('.custom-checkbox')?.checked ? '- [x] ' : '- [ ] ') + c;
+                    else if (t === 'quote') line = '> ' + c;
+                    else if (t === 'code') line = '```' + (b.querySelector('select')?.value || '') + '\n' + c + '\n```';
+                    else if (t === 'divider') line = '---';
+                    md += (idx > 0 ? "\n\n" : "") + line;
+                });
+                return md;
+            },
+            placeCursorAtEnd(el) {
+                const range = document.createRange(); const sel = window.getSelection();
+                range.selectNodeContents(el); range.collapse(false);
+                sel.removeAllRanges(); sel.addRange(range);
+            }
+        };
+
+        const ui = {
+            toggleSettings() { document.getElementById('settings-modal').classList.toggle('active'); },
+            setTheme(theme) { document.documentElement.classList.toggle('dark', theme === 'dark'); },
+            toggleTheme() { this.setTheme(!document.documentElement.classList.contains('dark') ? 'dark' : 'light'); },
+            renderSidebar() {
+                const container = document.getElementById("tree-container"); container.innerHTML = "";
+                const rootFolders = Stash.folders.filter(f => !f.parentId);
+                const rootNotes = Stash.notes.filter(n => !n.folderId);
+                if (rootFolders.length > 0) {
+                  container.appendChild(this.createSectionLabel("Folders"));
+                  rootFolders.forEach(f => container.appendChild(this.createFolderElement(f, 0)));
+                }
+                if (rootNotes.length > 0) {
+                  container.appendChild(this.createSectionLabel("Drafts"));
+                  rootNotes.sort((a,b) => b.updatedAt - a.updatedAt).forEach(n => container.appendChild(this.createNoteElement(n, 0)));
+                }
+            },
+            createSectionLabel(text) { const lbl = document.createElement("div"); lbl.className = "section-label"; lbl.innerText = text; return lbl; },
+            createFolderElement(folder, level) {
+                const fDiv = document.createElement("div"); fDiv.className = "folder-group";
+                const header = document.createElement("div");
+                header.className = `sidebar-item-folder group`; header.style.paddingLeft = `${level * 0.8 + 0.6}rem`; header.draggable = true;
+                header.ondragstart = (e) => { e.stopPropagation(); e.dataTransfer.setData("Stash-item", JSON.stringify({ id: folder.id, type: 'folder' })); };
+                header.ondragover = (e) => { e.preventDefault(); e.stopPropagation(); header.classList.add("drag-over-item"); };
+                header.ondragleave = (e) => { header.classList.remove("drag-over-item"); };
+                header.ondrop = (e) => { e.preventDefault(); e.stopPropagation(); header.classList.remove("drag-over-item"); const data = JSON.parse(e.dataTransfer.getData("Stash-item")); Stash.moveItem(data.id, folder.id, data.type); };
+                const chevron = document.createElement("span");
+                chevron.className = `transition-transform duration-150 ${folder.expanded ? 'rotate-90' : ''}`;
+                chevron.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="0.7rem" height="0.7rem" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" class="text-zinc-400"><polyline points="9 18 15 12 9 6"/></svg>`;
+                header.appendChild(chevron);
+                const icon = document.createElement("span"); icon.className = "opacity-60 text-[0.9em]"; icon.innerText = "📁"; header.appendChild(icon);
+                const isEditing = folder.isNew || Stash.editingFolderId === folder.id;
+                if (isEditing) {
+                    const input = document.createElement("input"); input.type = "text"; input.dataset.id = folder.id;
+                    input.className = "bg-transparent border-none outline-none w-full text-[0.8rem] text-zinc-900 dark:text-white font-medium";
+                    input.value = folder.name || "";
+                    input.onkeydown = (e) => { if (e.key === "Enter") Stash.finalizeFolder(folder.id, input.value); };
+                    input.onblur = () => Stash.finalizeFolder(folder.id, input.value);
+                    header.appendChild(input);
+                } else {
+                    const title = document.createElement("span"); title.className = "truncate flex-1 text-[0.8rem] font-medium text-zinc-600 dark:text-zinc-300";
+                    title.innerText = folder.name || 'Untitled'; header.appendChild(title);
+                    const actions = document.createElement("div"); actions.className = "hidden group-hover:flex items-center gap-[0.1em] ml-auto";
+                    const addBtn = document.createElement("button"); addBtn.className = "btn-sidebar-action";
+                    addBtn.innerHTML = `<svg width="0.8rem" height="0.8rem" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>`;
+                    addBtn.onmousedown = (e) => { e.stopPropagation(); Stash.createNewNote(folder.id); };
+                    const delBtn = document.createElement("button"); delBtn.className = "btn-delete-item";
+                    delBtn.innerHTML = `<svg width="0.8rem" height="0.8rem" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/></svg>`;
+                    delBtn.onmousedown = (e) => { e.stopPropagation(); Stash.deleteFolder(folder.id); };
+                    actions.appendChild(addBtn); actions.appendChild(delBtn); header.appendChild(actions);
+                }
+                header.onclick = (e) => { if (e.target.closest('button')) return; folder.expanded = !folder.expanded; ui.renderSidebar(); };
+                fDiv.appendChild(header);
+                if (folder.expanded) {
+                    const sub = document.createElement("div"); 
+                    const subFolders = Stash.folders.filter(f => f.parentId === folder.id);
+                    const subNotes = Stash.notes.filter(n => n.folderId === folder.id).sort((a,b)=>b.updatedAt-a.updatedAt);
+                    subFolders.forEach(sf => sub.appendChild(this.createFolderElement(sf, level + 1)));
+                    subNotes.forEach(sn => sub.appendChild(this.createNoteElement(sn, level + 1)));
+                    fDiv.appendChild(sub);
+                }
+                return fDiv;
+            },
+            createNoteElement(note, level) {
+                const item = document.createElement("div"); 
+                const isActive = note.id === Stash.activeNoteId;
+                item.className = `sidebar-item-note group ${isActive ? 'bg-zinc-200/50 dark:bg-zinc-800/80 text-zinc-900 dark:text-white font-semibold' : 'text-zinc-500 dark:text-dark-muted hover:bg-zinc-200/30 dark:hover:bg-dark-hover/40'}`;
+                item.style.paddingLeft = `${level * 0.8 + 0.8}rem`; item.draggable = true;
+                item.ondragstart = (e) => { e.stopPropagation(); e.dataTransfer.setData("Stash-item", JSON.stringify({ id: note.id, type: 'note' })); };
+                const title = document.createElement("span"); title.className = "truncate flex-1 text-[0.8rem]"; title.innerText = note.title || 'Untitled'; item.appendChild(title);
+                const delBtn = document.createElement("button"); delBtn.className = "btn-delete-item";
+                delBtn.innerHTML = `<svg width="0.8rem" height="0.8rem" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/></svg>`;
+                delBtn.onmousedown = (e) => { e.stopPropagation(); Stash.deleteNote(note.id); };
+                item.appendChild(delBtn);
+                item.onclick = (e) => { if (e.target.closest('button')) return; Stash.openNote(note.id); };
+                return item;
+            },
+            renderBreadcrumbs(note) {
+                let p = [note.title || 'Untitled'], curr = note.folderId;
+                while (curr) { const f = Stash.folders.find(it => it.id === curr); if (f) { p.unshift(f.name || 'Untitled'); curr = f.parentId; } else break; }
+                document.getElementById("breadcrumbs").innerText = `Stash / ${p.join(' / ')}`;
+            },
+            setSaveStatus(status) {
+                const t = document.getElementById("save-text"), i = document.getElementById("save-icon"); if (!t) return;
+                t.innerText = status; i.className = `w-[0.35rem] h-[0.35rem] rounded-full ${status === 'In-Memory' ? 'bg-zinc-200 dark:bg-zinc-800' : 'bg-[#2383e2] animate-pulse'}`;
+            }
+        };
+
+        const setupEventListeners = () => {
+            document.getElementById('btn-new-folder').onclick = () => Stash.createNewFolder();
+            document.getElementById('btn-new-note').onclick = () => Stash.createNewNote();
+            document.getElementById('btn-delete-active').onclick = () => Stash.deleteActive();
+            document.getElementById('btn-settings').onclick = () => ui.toggleSettings();
+            document.getElementById('btn-close-settings').onclick = () => ui.toggleSettings();
+            document.getElementById('theme-toggle').onclick = () => ui.toggleTheme();
+            document.getElementById('btn-export').onclick = () => Stash.exportToZip();
+            document.getElementById('sidebar-export-hint').onclick = () => Stash.exportToZip();
+            document.getElementById('btn-trigger-import').onclick = () => document.getElementById('import-input').click();
+            document.getElementById('import-input').onchange = (e) => { if (e.target.files[0]) Stash.importFromZip(e.target.files[0]); };
+            
+            window.onkeydown = (e) => {
+                if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); document.getElementById('finder-modal').classList.add('active'); document.getElementById('finder-input').focus(); }
+                if (e.key === 'Escape') { document.querySelectorAll('.modal-overlay').forEach(m => m.classList.remove('active')); }
+            };
+
+            window.onclick = (e) => { 
+                if (!e.target.closest("#slash-menu")) editor.hideMenu(); 
+                if (e.target.classList.contains('modal-overlay')) e.target.classList.remove('active'); 
+            };
+        };
+
+        Stash.init(); editor.init(); setupEventListeners();
+    </script>
+<script type="module" src="/index.tsx"></script>
+</body>
+</html>
