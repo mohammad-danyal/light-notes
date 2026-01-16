@@ -267,7 +267,12 @@
         <!-- Main Editor -->
         <main class="flex-1 flex flex-col bg-white dark:bg-dark-bg overflow-hidden relative">
             <header class="h-[3rem] flex items-center justify-between px-[2rem] border-b border-zinc-200/40 dark:border-dark-border bg-white/80 dark:bg-dark-bg/80 backdrop-blur-md z-10">
-                <div id="breadcrumbs" class="font-medium text-zinc-400 dark:text-dark-muted text-[0.7rem] truncate max-w-[40vw] uppercase tracking-wider">Stash / Welcome</div>
+                <div class="flex items-center gap-[1.5rem]">
+                    <div class="text-[0.65rem] font-medium text-zinc-400 dark:text-zinc-500 tracking-wide px-2 py-1 bg-zinc-100/50 dark:bg-zinc-800/30 rounded border border-zinc-200/50 dark:border-zinc-700/30" aria-label="Memory storage indicator: All data is stored in RAM">
+                        💾 All data is stored in RAM
+                    </div>
+                    <div id="breadcrumbs" class="font-medium text-zinc-400 dark:text-dark-muted text-[0.7rem] truncate max-w-[30vw] uppercase tracking-wider">Stash / Welcome</div>
+                </div>
                 <div class="flex items-center gap-[1rem]">
                     <div class="session-badge">Session Only</div>
                     <div id="save-status" class="flex items-center gap-[0.4em] text-[10px] font-bold uppercase tracking-tight text-zinc-300 dark:text-zinc-600">
