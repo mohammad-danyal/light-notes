@@ -1,0 +1,1596 @@
+<html lang="en" class="dark">
+  <head>
+    <style>
+      @import url(https://fonts.googleapis.com/css?family=Google+Sans+Text);
+  html {
+    font-family: &#39;Google Sans Text&#39;, &#39;Google Sans&#39;;
+    font-size: 14px;
+    color-scheme: light dark;
+    background: light-dark(white, black);
+    color: light-dark(black, white);
+  }
+    </style>
+    <script type="importmap">
+      {&#34;imports&#34;:{&#34;@modelcontextprotocol/sdk/&#34;:&#34;https://esm.sh/@modelcontextprotocol/sdk/dist/esm/&#34;,&#34;https://esm.sh/@modelcontextprotocol/sdk@^1.11.0/es2022/&#34;:&#34;https://esm.sh/@modelcontextprotocol/sdk@^1.11.0/es2022/dist/esm/&#34;,&#34;https://esm.sh/@modelcontextprotocol/sdk@^1.11.0/client/index?target=es2022&#34;:&#34;https://esm.sh/@modelcontextprotocol/sdk@^1.11.0/dist/esm/client/index?target=es2022&#34;,&#34;https://esm.sh/@modelcontextprotocol/sdk@^1.11.0/types?target=es2022&#34;:&#34;https://esm.sh/@modelcontextprotocol/sdk@^1.11.0/dist/esm/types?target=es2022&#34;,&#34;@/index&#34;:&#34;data:application/javascript;base64,&#34;,&#34;@&#34;:&#34;data:application/javascript;base64,&#34;}}
+    </script>
+    <script type="module">
+      const geminiUrl = window.location.origin + &#39;/api-proxy&#39;;
+
+  window.API_KEY = &#39;UNUSED_PLACEHOLDER_FOR_API_KEY&#39;;
+  window.GEMINI_API_KEY = &#39;UNUSED_PLACEHOLDER_FOR_API_KEY&#39;;
+  window.process = window.process || {};
+  window.process.env = window.process.env || {};
+  window.process.env.API_KEY = window.API_KEY;
+  window.process.env.GEMINI_API_KEY = window.GEMINI_API_KEY;
+    </script>
+    <script src="/public/websocket-interceptor.js" defer="">
+    </script>
+    <script>
+      if (&#39;serviceWorker&#39; in navigator) {
+  window.addEventListener(&#39;load&#39; , () =&gt; {
+    navigator.serviceWorker.register(&#39;./service-worker.js&#39;)
+      .then(registration =&gt; {
+        console.log(&#39;Service Worker registered successfully with scope:&#39;, registration.scope);
+      })
+      .catch(error =&gt; {
+        console.error(&#39;Service Worker registration failed:&#39;, error);
+      });
+  });
+} else {
+  console.log(&#39;Service workers are not supported in this browser.&#39;);
+}
+    </script>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>
+      Jotter | Spatial Stacks
+    </title>
+    <script src="https://cdn.tailwindcss.com">
+    </script>
+    <script>
+      tailwind.config = {
+            darkMode: &#39;class&#39;,
+            theme: {
+                extend: {
+                    colors: {
+                        dark: {
+                            bg: &#39;#050505&#39;,
+                            card: &#39;#0c0c0c&#39;,
+                            border: &#39;#1a1a1a&#39;,
+                            accent: &#39;#3b82f6&#39;
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+      @import url(&#39;https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&amp;family=Inter:wght@400;500;600;700;800&amp;display=swap&#39;);
+
+        :root {
+            --accent: #3b82f6;
+            --bg: #050505;
+            --card-bg: #0c0c0c;
+            --border: #1a1a1a;
+            --card-width: 450px;
+            --vertical-gap: 48px;
+        }
+
+        body {
+            margin: 0; padding: 0; overflow: hidden;
+            background-color: var(--bg); color: #eee;
+            font-family: &#39;Inter&#39;, sans-serif;
+            user-select: none;
+        }
+
+        #canvas-root {
+            width: 100vw; height: 100vh;
+            overflow: hidden;
+            position: relative;
+            background-image: radial-gradient(circle at 1px 1px, #1a1a1a 1px, transparent 0);
+            background-size: 40px 40px;
+            transition: opacity 0.5s ease;
+        }
+
+        body.presenting #canvas-root {
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        #viewport {
+            position: absolute;
+            top: 0; left: 0;
+            transform-origin: 0 0;
+            will-change: transform;
+            transition: transform 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        .card, .stack-representation {
+            position: absolute;
+            width: var(--card-width);
+            background: var(--card-bg);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 24px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            transition: left 0.4s cubic-bezier(0.2, 0.8, 0.2, 1), 
+                        top 0.4s cubic-bezier(0.2, 0.8, 0.2, 1), 
+                        border-color 0.2s, box-shadow 0.2s, opacity 0.3s, transform 0.3s;
+            cursor: grab;
+            z-index: 10;
+        }
+
+        .card:active, .stack-representation:active { cursor: grabbing; }
+
+        .card.focused, .stack-representation.focused {
+            border-color: var(--accent);
+            box-shadow: 0 0 0 1px var(--accent), 0 20px 40px rgba(0,0,0,0.7);
+            z-index: 1000 !important;
+            opacity: 1 !important;
+        }
+
+        .card-controls {
+            position: absolute;
+            top: 12px;
+            right: 12px;
+            display: flex;
+            gap: 4px;
+            opacity: 0;
+            transition: opacity 0.2s;
+            z-index: 50;
+        }
+        .card:hover .card-controls, .stack-representation:hover .card-controls, .card.focused .card-controls {
+            opacity: 1;
+        }
+
+        .card-editor {
+            outline: none !important;
+            font-family: &#39;Inter&#39;, sans-serif;
+            font-size: 15px;
+            line-height: 1.6;
+            color: #ccc;
+            white-space: pre-wrap;
+            word-break: break-word;
+            max-height: 200px;
+            overflow: hidden;
+            mask-image: linear-gradient(to bottom, black 80%, transparent 100%);
+            transition: max-height 0.3s ease-out;
+            user-select: text !important;
+        }
+
+        .card.focused .card-editor {
+            max-height: 5000px;
+            overflow: visible;
+            mask-image: none;
+        }
+
+        .card-editor h1 { font-size: 1.75rem; font-weight: 800; color: #fff; margin-top: 1rem; margin-bottom: 0.5rem; }
+        .card-editor h2 { font-size: 1.35rem; font-weight: 700; color: #fff; margin-top: 0.75rem; margin-bottom: 0.4rem; }
+        .card-editor p { margin-bottom: 0.5rem; }
+        .card-editor ul { list-style-type: disc; padding-left: 1.5rem; margin-bottom: 0.5rem; color: #bbb; }
+        .card-editor hr { border: none; border-top: 1px solid #222; margin: 1.5rem 0; }
+        .card-editor code { font-family: &#39;JetBrains Mono&#39;; background: #1a1a1a; padding: 2px 6px; border-radius: 4px; color: #38bdf8; font-size: 0.9em; }
+        .card-editor pre { background: #111; padding: 12px; border-radius: 8px; border: 1px solid #222; margin: 0.5rem 0; overflow-x: auto; font-family: &#39;JetBrains Mono&#39;; }
+        
+        .card-editor .todo-item { 
+            display: flex; 
+            align-items: flex-start; 
+            gap: 12px; 
+            margin-bottom: 6px; 
+            color: #aaa; 
+            border: none !important; 
+            outline: none !important; 
+            box-shadow: none !important;
+        }
+        .card-editor .todo-checkbox { 
+            margin-top: 5px; 
+            width: 16px; 
+            height: 16px; 
+            accent-color: var(--accent); 
+            cursor: pointer; 
+            flex-shrink: 0;
+            outline: none !important;
+            border: none !important;
+            box-shadow: none !important;
+        }
+        .card-editor .todo-text { 
+            outline: none !important; 
+            border: none !important; 
+            box-shadow: none !important; 
+            flex: 1; 
+            display: inline-block; 
+            min-height: 1.6em;
+            word-break: break-word;
+        }
+
+        .stack-representation {
+            height: 200px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            background: linear-gradient(145deg, #0f0f0f, #070707);
+        }
+
+        .stack-shadow-layer {
+            position: absolute;
+            inset: -4px;
+            border: 1px solid #222;
+            background: #080808;
+            border-radius: 12px;
+            z-index: -1;
+            transform: translate(6px, 6px);
+        }
+
+        .stack-shadow-layer-2 {
+            position: absolute;
+            inset: -4px;
+            border: 1px solid #1a1a1a;
+            background: #050505;
+            border-radius: 12px;
+            z-index: -2;
+            transform: translate(12px, 12px);
+        }
+
+        .stack-label {
+            background: rgba(59, 130, 246, 0.1);
+            color: var(--accent);
+            padding: 4px 12px;
+            border-radius: 99px;
+            font-weight: 700;
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 8px;
+            border: 1px solid rgba(59, 130, 246, 0.2);
+        }
+
+        #stack-sidebar {
+            position: fixed;
+            top: 0; right: 0;
+            width: 550px; height: 100vh;
+            background: rgba(5, 5, 5, 0.9);
+            backdrop-filter: blur(32px);
+            border-left: 1px solid #1a1a1a;
+            z-index: 6000;
+            transform: translateX(100%);
+            transition: transform 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+            display: flex;
+            flex-direction: column;
+            padding: 0;
+            box-shadow: -40px 0 80px rgba(0,0,0,0.8);
+        }
+
+        #stack-sidebar.active { transform: translateX(0); }
+
+        .deck-item {
+            width: 100%;
+            background: #0c0c0c;
+            border-bottom: 1px solid #1a1a1a;
+            padding: 32px 40px;
+            transition: background 0.3s ease, border-color 0.3s ease;
+            position: relative;
+            cursor: pointer;
+        }
+
+        .deck-item.active {
+            background: rgba(255, 255, 255, 0.02);
+            border-left: 4px solid var(--accent);
+            padding-left: 36px;
+        }
+
+        .deck-container {
+            flex: 1;
+            overflow-y: auto;
+            scroll-behavior: smooth;
+        }
+        .deck-container::-webkit-scrollbar { width: 6px; }
+        .deck-container::-webkit-scrollbar-thumb { background: #222; border-radius: 10px; }
+
+        .control-btn {
+            width: 28px; height: 28px;
+            display: flex; align-items: center; justify-content: center;
+            border-radius: 8px;
+            background: rgba(255, 255, 255, 0.05);
+            color: #888;
+            transition: all 0.2s;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        .control-btn:hover { background: rgba(255, 255, 255, 0.15); color: #fff; }
+        .control-btn.delete:hover { background: rgba(239, 68, 68, 0.3); color: #f87171; }
+
+        .overlay {
+            position: fixed; inset: 0;
+            background: rgba(0,0,0,0.9);
+            backdrop-filter: blur(16px);
+            z-index: 5000;
+            display: none;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .overlay.active { display: flex; }
+
+        .prompt-card {
+            background: #0c0c0c;
+            border: 1px solid #222;
+            border-radius: 20px;
+            padding: 32px;
+            width: 400px;
+            box-shadow: 0 30px 60px rgba(0,0,0,0.8);
+        }
+
+        .prompt-btn {
+            background: #1a1a1a;
+            color: #888;
+            border: 1px solid #222;
+            border-radius: 12px;
+            font-weight: 600;
+            transition: all 0.2s;
+            cursor: pointer;
+        }
+        .prompt-btn.highlighted {
+            border-color: #444;
+            color: #fff;
+            background: #222;
+        }
+        .prompt-btn.primary.highlighted {
+            background: var(--accent);
+            border-color: var(--accent);
+            color: #fff;
+        }
+        .prompt-btn.danger.highlighted {
+            background: #ef4444;
+            border-color: #ef4444;
+            color: #fff;
+        }
+
+        .keyboard-hint {
+            position: fixed; bottom: 20px; left: 50%;
+            transform: translateX(-50%);
+            background: rgba(10, 10, 10, 0.95);
+            backdrop-filter: blur(10px);
+            border: 1px solid #222;
+            padding: 12px 28px; border-radius: 99px; font-size: 12px;
+            color: #777; pointer-events: none;
+            z-index: 1000; display: flex; gap: 24px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            transition: opacity 0.3s;
+        }
+        body.presenting .keyboard-hint { opacity: 0; }
+
+        kbd { background: #222; padding: 2px 8px; border-radius: 6px; color: #999; border: 1px solid #333; margin-right: 4px; font-family: &#39;JetBrains Mono&#39;; font-size: 11px; }
+
+        .floating-actions {
+            position: fixed; top: 20px; right: 20px; display: flex; gap: 8px; z-index: 1000;
+            background: rgba(15, 15, 15, 0.6);
+            backdrop-filter: blur(12px);
+            padding: 6px;
+            border: 1px solid #222;
+            border-radius: 16px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+            transition: transform 0.3s, opacity 0.3s;
+        }
+        body.presenting .floating-actions {
+            transform: translateY(-100px);
+            opacity: 0;
+        }
+
+        .floating-btn {
+            background: transparent; border: 1px solid transparent; color: #888;
+            padding: 6px 12px; border-radius: 10px; cursor: pointer;
+            transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1); font-size: 13px; font-weight: 500;
+            display: flex; align-items: center; gap: 8px;
+        }
+        .floating-btn:hover { color: #fff; background: rgba(255, 255, 255, 0.05); border-color: #333; }
+        .floating-btn svg { width: 16px; height: 16px; }
+
+        #slash-menu {
+            position: fixed;
+            width: 200px;
+            background: #0c0c0c;
+            border: 1px solid #222;
+            border-radius: 12px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.6);
+            z-index: 9000;
+            display: none;
+            flex-direction: column;
+            padding: 6px;
+            overflow: hidden;
+        }
+        .slash-item {
+            padding: 10px 12px;
+            border-radius: 8px;
+            color: #888;
+            font-size: 13px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            transition: all 0.15s;
+        }
+        .slash-item:hover, .slash-item.selected {
+            background: rgba(59, 130, 246, 0.1);
+            color: #fff;
+        }
+        .slash-item svg { width: 14px; height: 14px; color: #555; }
+        .slash-item:hover svg, .slash-item.selected svg { color: var(--accent); }
+
+        /* Board Switcher Specific Styles */
+        #board-list-container::-webkit-scrollbar { display: none; }
+        .board-card {
+            min-width: 280px;
+            height: 200px;
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid #1a1a1a;
+            border-radius: 28px;
+            padding: 32px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            cursor: pointer;
+            transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+            position: relative;
+            backdrop-filter: blur(8px);
+        }
+        .board-card:hover, .board-card.selected {
+            background: rgba(255, 255, 255, 0.08);
+            border-color: var(--accent);
+            transform: translateY(-12px) scale(1.05);
+            box-shadow: 0 30px 60px rgba(0,0,0,0.6);
+            z-index: 10;
+        }
+        .board-card.selected::after {
+            content: &#39;&#39;;
+            position: absolute;
+            bottom: -16px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 6px;
+            height: 6px;
+            background: var(--accent);
+            border-radius: 50%;
+            box-shadow: 0 0 15px 2px var(--accent);
+            animation: pulse-glow 2s infinite;
+        }
+        @keyframes pulse-glow {
+            0% { opacity: 0.5; transform: translateX(-50%) scale(1); }
+            50% { opacity: 1; transform: translateX(-50%) scale(1.5); }
+            100% { opacity: 0.5; transform: translateX(-50%) scale(1); }
+        }
+        .board-card.new-board {
+            border-style: dashed;
+            border-color: #333;
+            justify-content: center;
+            align-items: center;
+            color: #555;
+            background: transparent;
+        }
+        .board-card.new-board:hover, .board-card.new-board.selected {
+            border-color: #666;
+            color: #fff;
+            background: rgba(255, 255, 255, 0.02);
+        }
+
+        /* Presentation Mode Styles */
+        #presentation-overlay {
+            position: fixed; inset: 0;
+            background: #000;
+            z-index: 9999;
+            display: none;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden;
+            font-family: &#39;Inter&#39;, sans-serif;
+        }
+        #presentation-overlay.active { display: flex; }
+        
+        .slide-container {
+            width: 80vw;
+            max-width: 1000px;
+            height: 70vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            position: relative;
+            perspective: 1000px;
+        }
+
+        .slide {
+            position: absolute;
+            inset: 0;
+            background: #0c0c0c;
+            border: 1px solid #1a1a1a;
+            border-radius: 32px;
+            padding: 60px 80px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            opacity: 0;
+            transform: translateX(100px) rotateY(-10deg);
+            transition: all 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+            pointer-events: none;
+            box-shadow: 0 40px 100px rgba(0,0,0,0.8);
+        }
+
+        .slide.active {
+            opacity: 1;
+            transform: translateX(0) rotateY(0);
+            pointer-events: auto;
+        }
+
+        .slide.prev {
+            opacity: 0;
+            transform: translateX(-100px) rotateY(10deg);
+        }
+
+        .slide-content {
+            font-size: 24px;
+            line-height: 1.6;
+            color: #ccc;
+        }
+
+        .slide-content h1 { font-size: 4rem; font-weight: 900; color: #fff; margin-bottom: 2rem; line-height: 1.1; letter-spacing: -0.02em; }
+        .slide-content h2 { font-size: 2.5rem; font-weight: 800; color: #fff; margin-top: 2rem; margin-bottom: 1.5rem; }
+        .slide-content p { margin-bottom: 1.5rem; }
+        .slide-content ul { list-style-type: none; padding-left: 0; margin-bottom: 1.5rem; }
+        .slide-content li { margin-bottom: 1rem; position: relative; padding-left: 2rem; }
+        .slide-content li::before { content: &#39;•&#39;; position: absolute; left: 0; color: var(--accent); font-weight: bold; }
+        .slide-content hr { border: none; border-top: 2px solid #222; margin: 3rem 0; }
+        .slide-content pre { background: #111; padding: 24px; border-radius: 16px; border: 1px solid #222; font-family: &#39;JetBrains Mono&#39;; font-size: 18px; color: #38bdf8; overflow-x: auto; margin: 1.5rem 0; }
+        .slide-content blockquote { border-left: 6px solid var(--accent); padding-left: 24px; font-style: italic; color: #aaa; margin: 2rem 0; }
+
+        .slide-progress-bar {
+            position: fixed; bottom: 0; left: 0; height: 4px; background: var(--accent);
+            width: 0%; transition: width 0.4s ease;
+            box-shadow: 0 0 10px var(--accent);
+        }
+
+        .slide-nav {
+            position: fixed; bottom: 40px; display: flex; align-items: center; gap: 24px;
+            color: #555; font-family: &#39;JetBrains Mono&#39;; font-size: 13px; z-index: 100;
+        }
+        .slide-nav span { color: #aaa; font-weight: 700; }
+    </style>
+  </head>
+  <body>
+    <div id="canvas-root">
+      <div id="viewport">
+      </div>
+    </div>
+    <!-- Presentation Mode Overlay -->
+    <div id="presentation-overlay">
+      <div class="slide-container" id="slide-container">
+      </div>
+      <div class="slide-progress-bar" id="slide-progress-bar">
+      </div>
+      <div class="slide-nav">
+        <kbd>        ←
+</kbd>
+        Prev
+        <span id="slide-counter">        1 / 1
+</span>
+        Next
+        <kbd>        →
+</kbd>
+        <div class="ml-8 text-zinc-600">
+          Press
+          <kbd>          F8
+</kbd>
+          to exit
+        </div>
+      </div>
+    </div>
+    <!-- Slash Menu -->
+    <div id="slash-menu">
+      <div class="slash-item" data-cmd="h1">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M4 12h16">
+          </path>
+          <path d="M4 18V6">
+          </path>
+          <path d="M20 18V6">
+          </path>
+        </svg>
+        Heading 1
+      </div>
+      <div class="slash-item" data-cmd="h2">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M4 12h16">
+          </path>
+          <path d="M4 18V6">
+          </path>
+          <path d="M20 18V6">
+          </path>
+        </svg>
+        Heading 2
+      </div>
+      <div class="slash-item" data-cmd="bullet">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="8" y1="6" x2="21" y2="6">
+          </line>
+          <line x1="8" y1="12" x2="21" y2="12">
+          </line>
+          <line x1="8" y1="18" x2="21" y2="18">
+          </line>
+          <line x1="3" y1="6" x2="3.01" y2="6">
+          </line>
+          <line x1="3" y1="12" x2="3.01" y2="12">
+          </line>
+          <line x1="3" y1="18" x2="3.01" y2="18">
+          </line>
+        </svg>
+        Bullet List
+      </div>
+      <div class="slash-item" data-cmd="todo">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="3" width="18" height="18" rx="2" ry="2">
+          </rect>
+          <path d="m9 12 2 2 4-4">
+          </path>
+        </svg>
+        Todo List
+      </div>
+      <div class="slash-item" data-cmd="code">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="16 18 22 12 16 6">
+          </polyline>
+          <polyline points="8 6 2 12 8 18">
+          </polyline>
+        </svg>
+        Code Block
+      </div>
+      <div class="slash-item" data-cmd="divider">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="5" y1="12" x2="19" y2="12">
+          </line>
+        </svg>
+        Divider
+      </div>
+    </div>
+    <!-- Stack Sidebar -->
+    <div id="stack-sidebar">
+      <div class="px-10 py-10 flex items-center justify-between border-b border-[#1a1a1a]">
+        <div>
+          <div id="stack-sidebar-label" class="stack-label mb-0">
+            STACK
+          </div>
+          <div class="text-[10px] text-zinc-500 font-mono mt-1">
+            SPACE TO EDIT • ESC TO EXIT
+          </div>
+        </div>
+        <div class="text-zinc-500 text-xs font-mono cursor-pointer hover:text-white transition-colors" onclick="state.exitExploring()">
+          <kbd>          ←
+</kbd>
+          BACK
+        </div>
+      </div>
+      <div id="deck-container" class="deck-container">
+      </div>
+    </div>
+    <div class="floating-actions">
+      <button class="floating-btn" onclick="state.togglePalette(true)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="11" cy="11" r="8">
+          </circle>
+          <line x1="21" y1="21" x2="16.65" y2="16.65">
+          </line>
+        </svg>
+        <span>        Search
+</span>
+        <kbd>        ⌘
+</kbd>
+        <kbd>        K
+</kbd>
+      </button>
+      <button class="floating-btn" onclick="state.toggleBoardSwitcher()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="3" width="7" height="7">
+          </rect>
+          <rect x="14" y="3" width="7" height="7">
+          </rect>
+          <rect x="14" y="14" width="7" height="7">
+          </rect>
+          <rect x="3" y="14" width="7" height="7">
+          </rect>
+        </svg>
+        <span>        Boards
+</span>
+        <kbd>        ⌘
+</kbd>
+        <kbd>        /
+</kbd>
+      </button>
+      <div class="w-[1px] h-6 bg-[#222] self-center mx-1">
+      </div>
+      <button class="floating-btn" onclick="state.exportData()">
+        Export
+      </button>
+      <button class="floating-btn" onclick="state.importData()">
+        Import
+      </button>
+    </div>
+    <!-- Creation Prompt -->
+    <div id="prompt-overlay" class="overlay">
+      <div class="prompt-card" onclick="event.stopPropagation()">
+        <h3 id="prompt-title" class="text-xl font-bold mb-4 text-white">
+          New Workspace
+        </h3>
+        <input type="text" id="workspace-name-input" placeholder="e.g. Brainstorming" class="w-full bg-[#1a1a1a] border border-[#333] rounded-xl p-4 text-white outline-none focus:border-blue-500 mb-6 transition-colors" />
+        <div class="flex gap-4">
+          <button id="btn-prompt-cancel" onclick="state.closePrompt()" class="prompt-btn flex-1 p-3">
+            Cancel
+          </button>
+          <button id="btn-prompt-confirm" onclick="state.finalizeBoardCreation()" class="prompt-btn primary highlighted flex-1 p-3">
+            Confirm
+          </button>
+        </div>
+      </div>
+    </div>
+    <!-- Delete Confirmation Modal -->
+    <div id="delete-overlay" class="overlay">
+      <div class="prompt-card" onclick="event.stopPropagation()">
+        <h3 id="delete-prompt-title" class="text-xl font-bold mb-2 text-white">
+          Delete?
+        </h3>
+        <p id="delete-prompt-body" class="text-zinc-500 mb-6 text-sm">
+          This action cannot be undone.
+        </p>
+        <div class="flex gap-4">
+          <button id="btn-delete-cancel" onclick="state.closeDeletePrompt()" class="prompt-btn flex-1 p-3">
+            Cancel
+          </button>
+          <button id="btn-delete-confirm" onclick="state.handleDeleteConfirmation()" class="prompt-btn danger highlighted flex-1 p-3">
+            Delete
+          </button>
+        </div>
+      </div>
+    </div>
+    <!-- Board Switcher -->
+    <div id="board-switcher-overlay" class="overlay">
+      <h2 class="text-4xl font-extrabold text-white mb-12">
+        Workspaces
+      </h2>
+      <div id="board-list-container" class="flex gap-10 p-12 max-w-[95vw] overflow-x-auto items-center scroll-smooth">
+      </div>
+      <div class="mt-12 text-zinc-500 text-sm font-mono tracking-widest uppercase flex gap-12 items-center">
+        <span class="flex items-center gap-2">        <kbd>        ←
+</kbd>
+        <kbd>        →
+</kbd>
+        Navigate
+</span>
+        <span class="flex items-center gap-2">        <kbd>        Enter
+</kbd>
+        Select
+</span>
+        <span class="flex items-center gap-2">        <kbd>        ⌘
+</kbd>
+        <kbd>        Delete
+</kbd>
+        Delete Workspace
+</span>
+        <span class="flex items-center gap-2">        <kbd>        Esc
+</kbd>
+        Close
+</span>
+      </div>
+    </div>
+    <div id="palette-overlay" class="overlay">
+      <div id="command-palette" onclick="event.stopPropagation()" class="w-[600px] bg-[#0c0c0c] border border-[#222] rounded-2xl shadow-2xl overflow-hidden">
+        <input type="text" id="palette-input" placeholder="Search cards..." class="w-full bg-transparent p-6 text-xl outline-none text-white border-b border-[#1a1a1a]" />
+        <div id="palette-results" class="max-h-[50vh] overflow-y-auto">
+        </div>
+      </div>
+    </div>
+    <div class="keyboard-hint">
+      <span>      <kbd>      ⌘
+</kbd>
+      <kbd>      K
+</kbd>
+      Search
+</span>
+      <span>      <kbd>      ⌘
+</kbd>
+      <kbd>      /
+</kbd>
+      Switch Boards
+</span>
+      <span>      <kbd>      ⌘
+</kbd>
+      <kbd>      ↵
+</kbd>
+      New Card
+</span>
+      <span>      <kbd>      F8
+</kbd>
+      Presentation
+</span>
+    </div>
+    <script type="module">
+      const getUUID = () =&gt; {
+            if (typeof crypto !== &#39;undefined&#39; &amp;&amp; crypto.randomUUID) return crypto.randomUUID();
+            return &#39;xxxx-xxxx-4xxx-yxxx-xxxx&#39;.replace(/[xy]/g, (c) =&gt; {
+                const r = Math.random() * 16 | 0, v = c == &#39;x&#39; ? r : (r &amp; 0x3 | 0x8);
+                return v.toString(16);
+            });
+        };
+
+        const LAYOUT = {
+            CARD_WIDTH: 450,
+            DEFAULT_HEIGHT: 200,
+            VERTICAL_GAP: 48,
+            STACK_HEIGHT: 200
+        };
+
+        window.state = {
+            boards: [],
+            currentBoardId: null,
+            cards: [],
+            activeId: null,
+            activeStackTag: null,
+            isExploring: false,
+            selectedStackCardIndex: 0,
+            camera: { x: window.innerWidth / 2 - 225, y: window.innerHeight / 2 - 80 },
+            isDraggingViewport: false,
+            paletteOpen: false,
+            boardSwitcherOpen: false,
+            promptOpen: false,
+            deletePromptOpen: false,
+            presentationMode: false,
+            currentSlideIndex: 0,
+            presentationSlides: [],
+            deleteTargetType: null, // &#39;stack&#39; or &#39;board&#39;
+            selectedPromptButton: &#39;confirm&#39;, // &#39;confirm&#39; or &#39;cancel&#39;
+            selectedDeleteButton: &#39;cancel&#39;, // &#39;confirm&#39; or &#39;cancel&#39;
+            slashMenuOpen: false,
+            selectedSlashIndex: 0,
+            selectedBoardIndex: 0,
+            selectedPaletteIndex: 0,
+            paletteResults: [],
+            draggedItem: null,
+            dragOffset: { x: 0, y: 0 },
+
+            init() {
+                const saved = localStorage.getItem(&#39;jotter_boards_stacks_v4&#39;);
+                if (saved) {
+                    try {
+                        const data = JSON.parse(saved);
+                        this.boards = data.boards || [];
+                        this.currentBoardId = data.currentBoardId;
+                    } catch (e) { console.error(&#34;Restore failed&#34;, e); }
+                } 
+                if (!this.boards.length) {
+                    const firstBoard = { id: getUUID(), name: &#39;Main Workspace&#39;, cards: [] };
+                    this.boards = [firstBoard];
+                    this.currentBoardId = firstBoard.id;
+                    this.cards = firstBoard.cards;
+                    const centerX = window.innerWidth / 2 - 225;
+                    const centerY = window.innerHeight / 2 - 80;
+                    this.createCard(&#34;&lt;h1&gt;Welcome to Jotter&lt;/h1&gt;&lt;p&gt;Try adding tags like #work or #ideas to auto-stack cards! Stacks only form when &lt;b&gt;two or more&lt;/b&gt; cards share the exact same tag.&lt;/p&gt;&lt;p&gt;Type &lt;code&gt;/&lt;/code&gt; to open the command menu.&lt;/p&gt;&#34;, centerX, centerY);
+                } else {
+                    this.loadCurrentBoard();
+                }
+                this.render();
+                if (this.cards.length &gt; 0) this.focusItem(this.cards[0].id);
+                this.setupEventListeners();
+            },
+
+            loadCurrentBoard() {
+                const board = this.boards.find(b =&gt; b.id === this.currentBoardId);
+                if (board) this.cards = board.cards;
+                else if (this.boards.length &gt; 0) {
+                    this.currentBoardId = this.boards[0].id;
+                    this.cards = this.boards[0].cards;
+                }
+            },
+
+            setupEventListeners() {
+                window.addEventListener(&#39;keydown&#39;, this.handleGlobalKeys.bind(this));
+                const canvas = document.getElementById(&#39;canvas-root&#39;);
+                canvas.addEventListener(&#39;mousedown&#39;, this.onMouseDown.bind(this));
+                window.addEventListener(&#39;mousemove&#39;, this.onMouseMove.bind(this));
+                window.addEventListener(&#39;mouseup&#39;, this.onMouseUp.bind(this));
+                document.getElementById(&#39;palette-input&#39;).oninput = (e) =&gt; this.searchPalette(e.target.value);
+                document.getElementById(&#39;palette-overlay&#39;).onclick = (e) =&gt; { if (e.target.id === &#39;palette-overlay&#39;) this.togglePalette(false); };
+                document.getElementById(&#39;board-switcher-overlay&#39;).onclick = (e) =&gt; { if (e.target.id === &#39;board-switcher-overlay&#39;) this.toggleBoardSwitcher(); };
+                document.getElementById(&#39;prompt-overlay&#39;).onclick = (e) =&gt; { if (e.target.id === &#39;prompt-overlay&#39;) this.closePrompt(); };
+                document.getElementById(&#39;delete-overlay&#39;).onclick = (e) =&gt; { if (e.target.id === &#39;delete-overlay&#39;) this.closeDeletePrompt(); };
+                
+                document.querySelectorAll(&#39;.slash-item&#39;).forEach((item, idx) =&gt; {
+                    item.onclick = (e) =&gt; { e.stopPropagation(); this.applySlashCommand(item.dataset.cmd); };
+                    item.onmouseenter = () =&gt; { this.selectedSlashIndex = idx; this.updateSlashSelection(); };
+                });
+
+                document.addEventListener(&#39;click&#39;, (e) =&gt; {
+                    if (e.target.classList.contains(&#39;todo-checkbox&#39;)) {
+                        const cb = e.target;
+                        if (cb.checked) cb.setAttribute(&#39;checked&#39;, &#39;checked&#39;);
+                        else cb.removeAttribute(&#39;checked&#39;);
+                        const editor = cb.closest(&#39;.card-editor&#39;);
+                        const cardContainer = cb.closest(&#39;.card&#39;) || cb.closest(&#39;.deck-item&#39;);
+                        const cardId = cardContainer?.dataset.id;
+                        if (cardId &amp;&amp; editor) {
+                            const card = this.cards.find(c =&gt; c.id === cardId);
+                            if (card) { card.content = editor.innerHTML; this.save(); }
+                        }
+                    }
+                });
+            },
+
+            reflow(forceCloseGaps = false) {
+                const stacks = this.getStacks();
+                const stackedCardIds = new Set();
+                Object.values(stacks).forEach(g =&gt; g.forEach(c =&gt; stackedCardIds.add(c.id)));
+                const blocks = [];
+                this.cards.forEach(c =&gt; {
+                    if (!stackedCardIds.has(c.id)) {
+                        const el = document.querySelector(`.card[data-id=&#34;${c.id}&#34;]`);
+                        blocks.push({ id: c.id, type: &#39;card&#39;, x: c.x, y: c.y, h: el ? el.offsetHeight : LAYOUT.DEFAULT_HEIGHT, ref: c });
+                    }
+                });
+                Object.entries(stacks).forEach(([tag, group]) =&gt; {
+                    blocks.push({ id: tag, type: &#39;stack&#39;, x: group[0].x, y: group[0].y, h: LAYOUT.STACK_HEIGHT, ref: group });
+                });
+                blocks.sort((a, b) =&gt; a.y - b.y);
+                for (let i = 0; i &lt; blocks.length; i++) {
+                    const a = blocks[i];
+                    for (let j = i + 1; j &lt; blocks.length; j++) {
+                        const b = blocks[j];
+                        const overlapX = (Math.abs(a.x - b.x) &lt; LAYOUT.CARD_WIDTH - 20);
+                        if (overlapX) {
+                            const minNextY = a.y + a.h + LAYOUT.VERTICAL_GAP;
+                            if (forceCloseGaps || b.y &lt; minNextY) {
+                                const diff = minNextY - b.y;
+                                b.y = minNextY;
+                                if (b.type === &#39;card&#39;) b.ref.y = b.y;
+                                else b.ref.forEach(c =&gt; c.y += diff);
+                            }
+                        }
+                    }
+                }
+                this.render();
+            },
+
+            extractTags(content) {
+                if (!content) return [];
+                const tags = [...content.matchAll(/#(\w+)(?=\s|&lt;|$)/g)].map(m =&gt; m[1]);
+                return [...new Set(tags)];
+            },
+
+            createCard(content = &#34;&#34;, x, y) {
+                const id = getUUID();
+                let finalX = x, finalY = y;
+                if (this.cards.length &gt; 0) {
+                    const stacks = this.getStacks();
+                    const stackedCardIds = new Set();
+                    Object.values(stacks).forEach(g =&gt; g.forEach(c =&gt; stackedCardIds.add(c.id)));
+                    let maxY = -Infinity;
+                    this.cards.forEach(c =&gt; {
+                        if (!stackedCardIds.has(c.id)) {
+                            const el = document.querySelector(`.card[data-id=&#34;${c.id}&#34;]`);
+                            const h = el ? el.offsetHeight : LAYOUT.DEFAULT_HEIGHT;
+                            if (c.y + h &gt; maxY) maxY = c.y + h;
+                        }
+                    });
+                    Object.entries(stacks).forEach(([tag, group]) =&gt; {
+                        const anchor = group[0];
+                        if (anchor.y + LAYOUT.STACK_HEIGHT &gt; maxY) maxY = anchor.y + LAYOUT.STACK_HEIGHT;
+                    });
+                    if (maxY !== -Infinity) finalY = maxY + LAYOUT.VERTICAL_GAP;
+                }
+                this.cards.push({ id, content, x: finalX, y: finalY, lastEditedAt: Date.now() });
+                this.render();
+                this.focusItem(id);
+                this.save();
+            },
+
+            deleteCard(id) {
+                this.cards = this.cards.filter(c =&gt; c.id !== id);
+                if (this.activeId === id) this.activeId = null;
+                this.save();
+                this.reflow(true);
+            },
+
+            handleDeleteConfirmation() {
+                if (this.selectedDeleteButton === &#39;confirm&#39;) {
+                    if (this.deleteTargetType === &#39;board&#39;) this.finalizeDeleteBoard();
+                    else this.finalizeDeleteStack();
+                } else {
+                    this.closeDeletePrompt();
+                }
+            },
+
+            openDeleteBoardPrompt() {
+                const boardToDelete = this.boards[this.selectedBoardIndex];
+                if (!boardToDelete || this.boards.length &lt;= 1) return;
+                this.deleteTargetType = &#39;board&#39;;
+                this.deletePromptOpen = true;
+                this.selectedDeleteButton = &#39;cancel&#39;;
+                document.getElementById(&#39;delete-prompt-title&#39;).innerText = `Delete Workspace?`;
+                document.getElementById(&#39;delete-prompt-body&#39;).innerText = `Permanently remove &#34;${boardToDelete.name}&#34; and all of its ${boardToDelete.cards.length} cards?`;
+                document.getElementById(&#39;delete-overlay&#39;).classList.add(&#39;active&#39;);
+                this.renderDeleteButtons();
+            },
+
+            finalizeDeleteBoard() {
+                const boardToDelete = this.boards[this.selectedBoardIndex];
+                this.boards = this.boards.filter(b =&gt; b.id !== boardToDelete.id);
+                this.currentBoardId = this.boards[0].id;
+                this.loadCurrentBoard();
+                this.closeDeletePrompt();
+                this.selectedBoardIndex = 0;
+                this.renderBoardList();
+                this.save();
+                this.render();
+                this.snapToActive();
+            },
+
+            openDeleteStackPrompt() {
+                this.deleteTargetType = &#39;stack&#39;;
+                this.deletePromptOpen = true;
+                this.selectedDeleteButton = &#39;cancel&#39;;
+                document.getElementById(&#39;delete-prompt-title&#39;).innerText = `Delete Stack?`;
+                document.getElementById(&#39;delete-prompt-body&#39;).innerText = `This will delete all cards within the #${this.activeStackTag} stack.`;
+                document.getElementById(&#39;delete-overlay&#39;).classList.add(&#39;active&#39;);
+                this.renderDeleteButtons();
+            },
+
+            closeDeletePrompt() {
+                this.deletePromptOpen = false;
+                document.getElementById(&#39;delete-overlay&#39;).classList.remove(&#39;active&#39;);
+            },
+
+            finalizeDeleteStack() {
+                if (this.activeStackTag) {
+                    const s = this.getStacks();
+                    const group = s[this.activeStackTag];
+                    if (group) {
+                        const ids = new Set(group.map(c =&gt; c.id));
+                        this.cards = this.cards.filter(c =&gt; !ids.has(c.id));
+                        this.activeId = this.activeStackTag = null;
+                        this.closeDeletePrompt();
+                        this.save();
+                        this.reflow(true);
+                    }
+                }
+            },
+
+            save() {
+                const bIdx = this.boards.findIndex(b =&gt; b.id === this.currentBoardId);
+                if (bIdx !== -1) this.boards[bIdx].cards = this.cards;
+                localStorage.setItem(&#39;jotter_boards_stacks_v4&#39;, JSON.stringify({ boards: this.boards, currentBoardId: this.currentBoardId }));
+            },
+
+            focusItem(idOrTag) {
+                this.activeId = idOrTag;
+                const s = this.getStacks();
+                if (s[idOrTag]) { this.activeStackTag = idOrTag; this.isExploring = false; }
+                else { this.activeStackTag = null; this.isExploring = false; }
+                this.snapToActive();
+                this.render();
+                setTimeout(() =&gt; this.reflow(), 100);
+                if (!this.activeStackTag) {
+                    setTimeout(() =&gt; {
+                        const ed = document.querySelector(`.card[data-id=&#34;${this.activeId}&#34;] .card-editor`);
+                        if (ed) this.placeCursorAtEnd(ed);
+                    }, 150);
+                }
+            },
+
+            placeCursorAtEnd(el) {
+                if (!el) return; el.focus({ preventScroll: true });
+                if (typeof window.getSelection != &#34;undefined&#34;) {
+                    const range = document.createRange(); 
+                    range.selectNodeContents(el); 
+                    range.collapse(false);
+                    const sel = window.getSelection(); 
+                    sel.removeAllRanges(); 
+                    sel.addRange(range);
+                }
+            },
+
+            snapToActive() {
+                if (!this.activeId) {
+                    this.camera = { x: window.innerWidth / 2 - 225, y: window.innerHeight / 2 - 80 };
+                } else {
+                    let tx, ty, s = this.getStacks();
+                    if (s[this.activeId]) { tx = s[this.activeId][0].x; ty = s[this.activeId][0].y; }
+                    else { const c = this.cards.find(x =&gt; x.id === this.activeId); if (!c) return; tx = c.x; ty = c.y; }
+                    this.camera.x = (window.innerWidth / 2) - tx - 225;
+                    this.camera.y = (window.innerHeight / 2) - ty - 120;
+                }
+                document.getElementById(&#39;viewport&#39;).style.transform = `translate(${this.camera.x}px, ${this.camera.y}px)`;
+            },
+
+            getStacks() {
+                const g = {};
+                this.cards.forEach(c =&gt; {
+                    const tags = this.extractTags(c.content);
+                    if (tags.length &gt; 0) { const p = tags[0]; if (!g[p]) g[p] = []; g[p].push(c); }
+                });
+                const rs = {};
+                for (const t in g) if (g[t].length &gt; 1) rs[t] = g[t];
+                return rs;
+            },
+
+            render() {
+                const vp = document.getElementById(&#39;viewport&#39;), s = this.getStacks(), stackedIds = new Set();
+                Object.values(s).forEach(grp =&gt; grp.forEach(c =&gt; stackedIds.add(c.id)));
+                const solo = this.cards.filter(c =&gt; !stackedIds.has(c.id)), rCardIds = new Set(), rTags = new Set();
+                Object.entries(s).forEach(([tag, group]) =&gt; {
+                    rTags.add(tag);
+                    let el = vp.querySelector(`.stack-representation[data-tag=&#34;${tag}&#34;]`);
+                    if (!el) {
+                        el = document.createElement(&#39;div&#39;); el.className = &#39;stack-representation spawn-anim&#39;; el.dataset.tag = tag;
+                        el.onclick = (e) =&gt; { e.stopPropagation(); this.focusItem(tag); }; vp.appendChild(el);
+                    }
+                    el.innerHTML = `&lt;div class=&#34;stack-shadow-layer&#34;&gt;&lt;/div&gt;&lt;div class=&#34;stack-shadow-layer-2&#34;&gt;&lt;/div&gt;&lt;div class=&#34;stack-label&#34;&gt;#${tag}&lt;/div&gt;
+                        &lt;div class=&#34;text-zinc-500 font-mono text-xs&#34;&gt;${group.length} cards&lt;/div&gt;
+                        &lt;div class=&#34;card-controls&#34;&gt;&lt;div class=&#34;control-btn delete&#34; onclick=&#34;event.stopPropagation(); state.activeStackTag=&#39;${tag}&#39;; state.openDeleteStackPrompt();&#34;&gt;×&lt;/div&gt;&lt;/div&gt;`;
+                    el.classList.toggle(&#39;focused&#39;, this.activeId === tag);
+                    el.style.left = `${group[0].x}px`; el.style.top = `${group[0].y}px`;
+                });
+                solo.forEach(card =&gt; {
+                    rCardIds.add(card.id);
+                    let el = vp.querySelector(`.card[data-id=&#34;${card.id}&#34;]`);
+                    if (!el) {
+                        el = document.createElement(&#39;div&#39;); el.className = &#39;card spawn-anim&#39;; el.dataset.id = card.id;
+                        const ctrl = document.createElement(&#39;div&#39;); ctrl.className = &#39;card-controls&#39;;
+                        const dBtn = document.createElement(&#39;div&#39;); dBtn.className = &#39;control-btn delete&#39;; dBtn.innerHTML = &#39;×&#39;;
+                        dBtn.onclick = (e) =&gt; { e.stopPropagation(); this.deleteCard(card.id); };
+                        const ed = document.createElement(&#39;div&#39;); ed.className = &#39;card-editor&#39;; ed.contentEditable = &#34;true&#34;;
+                        ed.oninput = (e) =&gt; this.handleEditorInput(e, card);
+                        ed.onkeydown = (e) =&gt; this.handleEditorKeyDown(e, card);
+                        ed.onblur = () =&gt; setTimeout(() =&gt; this.reflow(), 100);
+                        ed.onfocus = () =&gt; { if (this.activeId !== card.id) this.focusItem(card.id); };
+                        ctrl.appendChild(dBtn); el.appendChild(ctrl); el.appendChild(ed); vp.appendChild(el);
+                    }
+                    el.classList.toggle(&#39;focused&#39;, this.activeId === card.id);
+                    el.style.left = `${card.x}px`; el.style.top = `${card.y}px`;
+                    const ed = el.querySelector(&#39;.card-editor&#39;); 
+                    if (document.activeElement !== ed &amp;&amp; !ed.contains(document.activeElement)) { ed.innerHTML = card.content || &#34;&#34;; }
+                });
+                vp.querySelectorAll(&#39;.card&#39;).forEach(el =&gt; { if (!rCardIds.has(el.dataset.id)) el.remove(); });
+                vp.querySelectorAll(&#39;.stack-representation&#39;).forEach(el =&gt; { if (!rTags.has(el.dataset.tag)) el.remove(); });
+                const sb = document.getElementById(&#39;stack-sidebar&#39;);
+                if (this.isExploring &amp;&amp; this.activeStackTag &amp;&amp; s[this.activeStackTag]) { sb.classList.add(&#39;active&#39;); this.renderStackSidebar(); } 
+                else sb.classList.remove(&#39;active&#39;);
+            },
+
+            handleEditorInput(e, card) {
+                const ed = e.target, oldT = this.extractTags(card.content);
+                card.content = ed.innerHTML; const newT = this.extractTags(card.content);
+                this.save(); 
+                if (JSON.stringify(oldT) !== JSON.stringify(newT)) {
+                    const stacks = this.getStacks();
+                    let targetStackTag = null;
+                    for (const tag in stacks) {
+                        if (stacks[tag].some(c =&gt; c.id === card.id)) { targetStackTag = tag; break; }
+                    }
+                    if (targetStackTag) {
+                        this.activeId = targetStackTag;
+                        this.activeStackTag = targetStackTag;
+                        this.isExploring = true;
+                        this.selectedStackCardIndex = stacks[targetStackTag].findIndex(c =&gt; c.id === card.id);
+                    }
+                    this.render();
+                }
+                const sel = window.getSelection();
+                if (sel.rangeCount &gt; 0) {
+                    const range = sel.getRangeAt(0), text = range.startContainer.textContent.substring(0, range.startOffset);
+                    if (text.endsWith(&#39;/&#39;)) this.showSlashMenu(range);
+                    else if (this.slashMenuOpen) this.hideSlashMenu();
+                }
+                this.reflow();
+            },
+
+            showSlashMenu(range) {
+                this.slashMenuOpen = true;
+                const rect = range.getBoundingClientRect();
+                const menu = document.getElementById(&#39;slash-menu&#39;);
+                menu.style.display = &#39;flex&#39;;
+                menu.style.top = `${rect.bottom + window.scrollY + 5}px`;
+                menu.style.left = `${rect.left + window.scrollX}px`;
+                this.selectedSlashIndex = 0;
+                this.updateSlashSelection();
+            },
+
+            hideSlashMenu() {
+                this.slashMenuOpen = false;
+                document.getElementById(&#39;slash-menu&#39;).style.display = &#39;none&#39;;
+            },
+
+            updateSlashSelection() {
+                document.querySelectorAll(&#39;.slash-item&#39;).forEach((item, idx) =&gt; {
+                    item.classList.toggle(&#39;selected&#39;, idx === this.selectedSlashIndex);
+                });
+            },
+
+            applySlashCommand(cmd) {
+                const selection = window.getSelection();
+                if (!selection.rangeCount) return;
+                const range = selection.getRangeAt(0);
+                const container = range.startContainer;
+                const offset = range.startOffset;
+                if (container.nodeType === Node.TEXT_NODE) {
+                    const val = container.textContent;
+                    container.textContent = val.substring(0, offset - 1) + val.substring(offset);
+                    range.setStart(container, offset - 1);
+                    range.setEnd(container, offset - 1);
+                }
+                let html = &#39;&#39;;
+                switch (cmd) {
+                    case &#39;h1&#39;: html = &#39;&lt;h1&gt;Heading&lt;/h1&gt;&#39;; break;
+                    case &#39;h2&#39;: html = &#39;&lt;h2&gt;Subheading&lt;/h2&gt;&#39;; break;
+                    case &#39;bullet&#39;: html = &#39;&lt;ul&gt;&lt;li&gt;List Item&lt;/li&gt;&lt;/ul&gt;&#39;; break;
+                    case &#39;todo&#39;: html = &#39;&lt;div class=&#34;todo-item&#34;&gt;&lt;input type=&#34;checkbox&#34; class=&#34;todo-checkbox&#34; contenteditable=&#34;false&#34;&gt;&lt;span class=&#34;todo-text&#34;&gt;&lt;/span&gt;&lt;/div&gt;&#39;; break;
+                    case &#39;code&#39;: html = &#39;&lt;pre&gt;&lt;code&gt;// Code&lt;/code&gt;&lt;/pre&gt;&#39;; break;
+                    case &#39;divider&#39;: html = &#39;&lt;hr&gt;&#39;; break;
+                }
+                document.execCommand(&#39;insertHTML&#39;, false, html);
+                this.hideSlashMenu();
+                this.reflow();
+                if (cmd === &#39;todo&#39;) {
+                    setTimeout(() =&gt; {
+                        const ed = document.activeElement;
+                        const lastTodo = Array.from(ed.querySelectorAll(&#39;.todo-item&#39;)).pop();
+                        const span = lastTodo?.querySelector(&#39;.todo-text&#39;);
+                        if (span) this.placeCursorAtEnd(span);
+                    }, 20);
+                }
+            },
+
+            handleEditorKeyDown(e, card) {
+                if (this.slashMenuOpen) {
+                    if (e.key === &#39;ArrowDown&#39;) { e.preventDefault(); this.selectedSlashIndex = (this.selectedSlashIndex + 1) % 6; this.updateSlashSelection(); } 
+                    else if (e.key === &#39;ArrowUp&#39;) { e.preventDefault(); this.selectedSlashIndex = (this.selectedSlashIndex + 5) % 6; this.updateSlashSelection(); } 
+                    else if (e.key === &#39;Enter&#39;) { e.preventDefault(); const items = document.querySelectorAll(&#39;.slash-item&#39;); this.applySlashCommand(items[this.selectedSlashIndex].dataset.cmd); } 
+                    else if (e.key === &#39;Escape&#39; || e.key === &#39; &#39;) { this.hideSlashMenu(); }
+                    return;
+                }
+                const selection = window.getSelection();
+                if (!selection.rangeCount) return;
+                const range = selection.getRangeAt(0);
+                const currentElement = selection.anchorNode.nodeType === Node.TEXT_NODE ? selection.anchorNode.parentElement : selection.anchorNode;
+                const todoItem = currentElement.closest(&#39;.todo-item&#39;);
+                if (todoItem) {
+                    const textSpan = todoItem.querySelector(&#39;.todo-text&#39;);
+                    if (e.key === &#39;Enter&#39;) {
+                        e.preventDefault();
+                        const text = textSpan.innerText.trim();
+                        if (text === &#39;&#39;) {
+                            const p = document.createElement(&#39;p&#39;); p.innerHTML = &#39;&lt;br&gt;&#39;; todoItem.replaceWith(p);
+                            const newRange = document.createRange(); newRange.setStart(p, 0); newRange.collapse(true);
+                            selection.removeAllRanges(); selection.addRange(newRange);
+                        } else {
+                            const newTodo = document.createElement(&#39;div&#39;); newTodo.className = &#39;todo-item&#39;;
+                            newTodo.innerHTML = &#39;&lt;input type=&#34;checkbox&#34; class=&#34;todo-checkbox&#34; contenteditable=&#34;false&#34;&gt;&lt;span class=&#34;todo-text&#34;&gt;&lt;/span&gt;&#39;;
+                            todoItem.after(newTodo); const newSpan = newTodo.querySelector(&#39;.todo-text&#39;);
+                            const newRange = document.createRange(); newRange.setStart(newSpan, 0); newRange.collapse(true);
+                            selection.removeAllRanges(); selection.addRange(newRange);
+                        }
+                        this.reflow(); return;
+                    } else if (e.key === &#39;Backspace&#39;) {
+                        const atStart = range.startOffset === 0 &amp;&amp; (range.startContainer === textSpan || range.startContainer.parentNode === textSpan);
+                        if (atStart) {
+                            e.preventDefault();
+                            const content = textSpan.innerHTML; const p = document.createElement(&#39;p&#39;); p.innerHTML = content || &#39;&lt;br&gt;&#39;;
+                            todoItem.replaceWith(p); const newRange = document.createRange();
+                            newRange.setStart(p, 0); newRange.collapse(true);
+                            selection.removeAllRanges(); selection.addRange(newRange); this.reflow();
+                        }
+                    }
+                }
+            },
+
+            renderStackSidebar() {
+                const container = document.getElementById(&#39;deck-container&#39;), label = document.getElementById(&#39;stack-sidebar-label&#39;);
+                const s = this.getStacks(), cards = s[this.activeStackTag];
+                if (!cards) { this.exitExploring(); return; }
+                label.innerText = `#${this.activeStackTag}`; container.innerHTML = &#39;&#39;;
+                cards.forEach((c, idx) =&gt; {
+                    const el = document.createElement(&#39;div&#39;); 
+                    el.className = `deck-item ${idx === this.selectedStackCardIndex ? &#39;active&#39; : &#39;&#39;}`;
+                    el.dataset.id = c.id;
+                    el.innerHTML = `&lt;div class=&#34;card-editor h-full&#34; contenteditable=&#34;true&#34;&gt;${c.content}&lt;/div&gt;
+                        &lt;div class=&#34;card-controls&#34;&gt;&lt;div class=&#34;control-btn delete&#34; onclick=&#34;event.stopPropagation(); state.deleteCard(&#39;${c.id}&#39;);&#34;&gt;×&lt;/div&gt;&lt;/div&gt;`;
+                    const ed = el.querySelector(&#39;.card-editor&#39;);
+                    ed.oninput = (e) =&gt; { c.content = e.target.innerHTML; this.save(); const ns = this.getStacks(); if (!ns[this.activeStackTag]) this.exitExploring(); };
+                    ed.onkeydown = (e) =&gt; this.handleEditorKeyDown(e, c);
+                    el.onclick = () =&gt; { this.selectedStackCardIndex = idx; this.renderStackSidebar(); if (ed) this.placeCursorAtEnd(ed); };
+                    container.appendChild(el);
+                    if (idx === this.selectedStackCardIndex) {
+                        setTimeout(() =&gt; { el.scrollIntoView({ behavior: &#39;smooth&#39;, block: &#39;center&#39; }); this.placeCursorAtEnd(ed); }, 50);
+                    }
+                });
+            },
+
+            exitExploring() { this.isExploring = false; this.render(); },
+
+            togglePalette(open) {
+                this.paletteOpen = open; document.getElementById(&#39;palette-overlay&#39;).style.display = open ? &#39;flex&#39; : &#39;none&#39;;
+                if (open) { this.selectedPaletteIndex = 0; document.getElementById(&#39;palette-input&#39;).value = &#39;&#39;; this.searchPalette(&#39;&#39;); document.getElementById(&#39;palette-input&#39;).focus(); }
+            },
+
+            searchPalette(q) {
+                const query = (q || &#34;&#34;).toLowerCase();
+                this.paletteResults = this.cards.filter(c =&gt; (c.content || &#34;&#34;).toLowerCase().includes(query));
+                this.selectedPaletteIndex = 0; this.renderPaletteResults();
+            },
+
+            renderPaletteResults() {
+                const res = document.getElementById(&#39;palette-results&#39;); res.innerHTML = &#39;&#39;;
+                this.paletteResults.forEach((c, idx) =&gt; {
+                    const div = document.createElement(&#39;div&#39;);
+                    div.className = `p-4 cursor-pointer border-b border-[#1a1a1a] transition-colors hover:bg-zinc-800 ${idx === this.selectedPaletteIndex ? &#39;bg-zinc-800&#39; : &#39;&#39;}`;
+                    div.innerText = (c.content || &#34;&#34;).replace(/&lt;[^&gt;]*&gt;/g, &#39;&#39;).substring(0, 100) + &#39;...&#39;;
+                    div.onclick = () =&gt; { this.focusItem(c.id); this.togglePalette(false); }; res.appendChild(div);
+                });
+            },
+
+            toggleBoardSwitcher() {
+                this.boardSwitcherOpen = !this.boardSwitcherOpen;
+                document.getElementById(&#39;board-switcher-overlay&#39;).style.display = this.boardSwitcherOpen ? &#39;flex&#39; : &#39;none&#39;;
+                if (this.boardSwitcherOpen) { 
+                    this.selectedBoardIndex = this.boards.findIndex(b =&gt; b.id === this.currentBoardId); 
+                    this.renderBoardList(); 
+                }
+            },
+
+            renderBoardList() {
+                const container = document.getElementById(&#39;board-list-container&#39;); container.innerHTML = &#39;&#39;;
+                this.boards.forEach((b, idx) =&gt; {
+                    const el = document.createElement(&#39;div&#39;); el.className = `board-card ${idx === this.selectedBoardIndex ? &#39;selected&#39; : &#39;&#39;}`;
+                    el.innerHTML = `&lt;div class=&#34;flex-1&#34;&gt;&lt;div class=&#34;text-2xl font-black text-white leading-tight&#34;&gt;${b.name}&lt;/div&gt;&lt;/div&gt;
+                        &lt;div class=&#34;flex items-center justify-between&#34;&gt;&lt;div class=&#34;text-[10px] text-zinc-500 font-mono tracking-widest uppercase&#34;&gt;${b.cards.length} Cards&lt;/div&gt;
+                        &lt;svg class=&#34;w-5 h-5 opacity-20&#34; viewBox=&#34;0 0 24 24&#34; fill=&#34;none&#34; stroke=&#34;currentColor&#34; stroke-width=&#34;2&#34;&gt;&lt;rect x=&#34;3&#34; y=&#34;3&#34; width=&#34;18&#34; height=&#34;18&#34; rx=&#34;2&#34; ry=&#34;2&#34;&gt;&lt;/rect&gt;&lt;/svg&gt;&lt;/div&gt;`;
+                    el.onclick = (e) =&gt; { e.stopPropagation(); this.switchBoard(b.id); this.toggleBoardSwitcher(); };
+                    el.onmouseenter = () =&gt; { this.selectedBoardIndex = idx; this.renderBoardList(); }; 
+                    container.appendChild(el);
+                    if (idx === this.selectedBoardIndex) el.scrollIntoView({ behavior: &#39;smooth&#39;, block: &#39;nearest&#39;, inline: &#39;center&#39; });
+                });
+                
+                const newEl = document.createElement(&#39;div&#39;);
+                newEl.className = `board-card new-board ${this.selectedBoardIndex === this.boards.length ? &#39;selected&#39; : &#39;&#39;}`;
+                newEl.innerHTML = `&lt;svg class=&#34;w-8 h-8 mb-4 opacity-40&#34; viewBox=&#34;0 0 24 24&#34; fill=&#34;none&#34; stroke=&#34;currentColor&#34; stroke-width=&#34;2.5&#34;&gt;&lt;line x1=&#34;12&#34; y1=&#34;5&#34; x2=&#34;12&#34; y2=&#34;19&#34;&gt;&lt;/line&gt;&lt;line x1=&#34;5&#34; y1=&#34;12&#34; x2=&#34;19&#34; y2=&#34;12&#34;&gt;&lt;/line&gt;&lt;/svg&gt;
+                    &lt;div class=&#34;text-[11px] font-bold uppercase tracking-[0.2em] text-zinc-400&#34;&gt;New Board&lt;/div&gt;`;
+                newEl.onclick = (e) =&gt; { e.stopPropagation(); this.openPrompt(); };
+                newEl.onmouseenter = () =&gt; { this.selectedBoardIndex = this.boards.length; this.renderBoardList(); };
+                container.appendChild(newEl);
+                if (this.selectedBoardIndex === this.boards.length) newEl.scrollIntoView({ behavior: &#39;smooth&#39;, block: &#39;nearest&#39;, inline: &#39;center&#39; });
+            },
+
+            switchBoard(id) {
+                this.save(); this.currentBoardId = id; this.loadCurrentBoard();
+                this.activeId = this.cards[0]?.id || null; this.isExploring = false; 
+                this.render(); this.snapToActive();
+            },
+
+            openPrompt() {
+                this.promptOpen = true;
+                this.selectedPromptButton = &#39;confirm&#39;;
+                const input = document.getElementById(&#39;workspace-name-input&#39;);
+                input.value = &#39;&#39;;
+                document.getElementById(&#39;prompt-overlay&#39;).classList.add(&#39;active&#39;);
+                setTimeout(() =&gt; input.focus(), 50);
+                this.renderPromptButtons();
+            },
+
+            closePrompt() {
+                this.promptOpen = false;
+                document.getElementById(&#39;prompt-overlay&#39;).classList.remove(&#39;active&#39;);
+            },
+
+            finalizeBoardCreation() {
+                if (this.selectedPromptButton === &#39;confirm&#39;) {
+                    const name = document.getElementById(&#39;workspace-name-input&#39;).value.trim() || &#34;Untitled Workspace&#34;;
+                    const newBoard = { id: getUUID(), name, cards: [] };
+                    this.boards.push(newBoard);
+                    this.switchBoard(newBoard.id);
+                    this.closePrompt();
+                    if (this.boardSwitcherOpen) this.toggleBoardSwitcher();
+                    this.save();
+                } else {
+                    this.closePrompt();
+                }
+            },
+
+            renderPromptButtons() {
+                const c = document.getElementById(&#39;btn-prompt-cancel&#39;), f = document.getElementById(&#39;btn-prompt-confirm&#39;);
+                if (c &amp;&amp; f) {
+                    c.classList.toggle(&#39;highlighted&#39;, this.selectedPromptButton === &#39;cancel&#39;);
+                    f.classList.toggle(&#39;highlighted&#39;, this.selectedPromptButton === &#39;confirm&#39;);
+                }
+            },
+
+            renderDeleteButtons() {
+                const c = document.getElementById(&#39;btn-delete-cancel&#39;), d = document.getElementById(&#39;btn-delete-confirm&#39;);
+                if (c &amp;&amp; d) {
+                    c.classList.toggle(&#39;highlighted&#39;, this.selectedDeleteButton === &#39;cancel&#39;);
+                    d.classList.toggle(&#39;highlighted&#39;, this.selectedDeleteButton === &#39;confirm&#39;);
+                }
+            },
+
+            togglePresentationMode() {
+                this.presentationMode = !this.presentationMode;
+                const overlay = document.getElementById(&#39;presentation-overlay&#39;);
+                document.body.classList.toggle(&#39;presenting&#39;, this.presentationMode);
+                
+                if (this.presentationMode) {
+                    // Collect and sort cards spatially (top-to-bottom)
+                    // We also need to expand stacks so each card is a slide
+                    const sortedCards = [...this.cards].sort((a, b) =&gt; a.y - b.y);
+                    this.presentationSlides = sortedCards.map(c =&gt; c.content);
+                    this.currentSlideIndex = 0;
+                    overlay.classList.add(&#39;active&#39;);
+                    this.renderSlides();
+                } else {
+                    overlay.classList.remove(&#39;active&#39;);
+                }
+            },
+
+            renderSlides() {
+                const container = document.getElementById(&#39;slide-container&#39;);
+                container.innerHTML = &#39;&#39;;
+                this.presentationSlides.forEach((content, idx) =&gt; {
+                    const slide = document.createElement(&#39;div&#39;);
+                    slide.className = `slide ${idx === this.currentSlideIndex ? &#39;active&#39; : (idx &lt; this.currentSlideIndex ? &#39;prev&#39; : &#39;&#39;)}`;
+                    slide.innerHTML = `&lt;div class=&#34;slide-content&#34;&gt;${content}&lt;/div&gt;`;
+                    container.appendChild(slide);
+                });
+                
+                // Update progress and counter
+                const progress = ((this.currentSlideIndex + 1) / this.presentationSlides.length) * 100;
+                document.getElementById(&#39;slide-progress-bar&#39;).style.width = `${progress}%`;
+                document.getElementById(&#39;slide-counter&#39;).innerText = `${this.currentSlideIndex + 1} / ${this.presentationSlides.length}`;
+            },
+
+            navigatePresentation(dir) {
+                if (!this.presentationMode) return;
+                const newIdx = this.currentSlideIndex + dir;
+                if (newIdx &gt;= 0 &amp;&amp; newIdx &lt; this.presentationSlides.length) {
+                    this.currentSlideIndex = newIdx;
+                    this.renderSlides();
+                }
+            },
+
+            onMouseDown(e) {
+                if (this.activeStackTag &amp;&amp; this.isExploring) return; 
+                if (this.paletteOpen || this.boardSwitcherOpen || this.promptOpen || this.deletePromptOpen || this.slashMenuOpen || this.presentationMode) return;
+                const target = e.target;
+                if (target.closest(&#39;.card-editor&#39;) || target.closest(&#39;.floating-btn&#39;) || target.closest(&#39;.control-btn&#39;) || target.closest(&#39;.todo-checkbox&#39;)) return;
+                const sEl = target.closest(&#39;.stack-representation&#39;), cEl = target.closest(&#39;.card&#39;);
+                if (sEl) { this.draggedItem = { type: &#39;stack&#39;, tag: sEl.dataset.tag }; this.focusItem(sEl.dataset.tag); }
+                else if (cEl) { this.draggedItem = { type: &#39;card&#39;, id: cEl.dataset.id }; this.focusItem(cEl.dataset.id); }
+                else { this.isDraggingViewport = true; this.dragStart = { x: e.clientX - this.camera.x, y: e.clientY - this.camera.y }; return; }
+                const itm = this.draggedItem.type === &#39;card&#39; ? this.cards.find(x =&gt; x.id === this.draggedItem.id) : this.getStacks()[this.draggedItem.tag][0];
+                this.dragOffset = { x: e.clientX - (itm.x + this.camera.x), y: e.clientY - (itm.y + this.camera.y) };
+            },
+
+            onMouseMove(e) {
+                if (this.isDraggingViewport) {
+                    this.camera.x = e.clientX - this.dragStart.x; this.camera.y = e.clientY - this.dragStart.y;
+                    document.getElementById(&#39;viewport&#39;).style.transform = `translate(${this.camera.x}px, ${this.camera.y}px)`;
+                } else if (this.draggedItem) {
+                    const dx = e.clientX - this.dragOffset.x - this.camera.x, dy = e.clientY - this.dragOffset.y - this.camera.y;
+                    if (this.draggedItem.type === &#39;card&#39;) { const c = this.cards.find(x =&gt; x.id === this.draggedItem.id); c.x = dx; c.y = dy; }
+                    else { const grp = this.getStacks()[this.draggedItem.tag]; if (grp) { const ox = dx - grp[0].x, oy = dy - grp[0].y; grp.forEach(x =&gt; { x.x += ox; x.y += oy; }); } }
+                    this.render();
+                }
+            },
+
+            onMouseUp() { this.isDraggingViewport = false; if (this.draggedItem) { this.save(); this.draggedItem = null; this.reflow(); } },
+
+            handleGlobalKeys(e) {
+                const isMod = e.metaKey || e.ctrlKey;
+                
+                if (e.key === &#39;F8&#39;) {
+                    e.preventDefault();
+                    this.togglePresentationMode();
+                    return;
+                }
+
+                if (this.presentationMode) {
+                    if (e.key === &#39;ArrowRight&#39; || e.key === &#39; &#39; || e.key === &#39;ArrowDown&#39;) { e.preventDefault(); this.navigatePresentation(1); }
+                    else if (e.key === &#39;ArrowLeft&#39; || e.key === &#39;Backspace&#39; || e.key === &#39;ArrowUp&#39;) { e.preventDefault(); this.navigatePresentation(-1); }
+                    else if (e.key === &#39;Escape&#39;) { e.preventDefault(); this.togglePresentationMode(); }
+                    return;
+                }
+
+                if (this.promptOpen) {
+                    if (e.key === &#39;ArrowRight&#39; || e.key === &#39;ArrowLeft&#39;) { e.preventDefault(); this.selectedPromptButton = (this.selectedPromptButton === &#39;cancel&#39;) ? &#39;confirm&#39; : &#39;cancel&#39;; this.renderPromptButtons(); }
+                    else if (e.key === &#39;Enter&#39;) { e.preventDefault(); this.finalizeBoardCreation(); }
+                    else if (e.key === &#39;Escape&#39;) { e.preventDefault(); this.closePrompt(); }
+                    return;
+                }
+                if (this.deletePromptOpen) {
+                    if (e.key === &#39;ArrowRight&#39; || e.key === &#39;ArrowLeft&#39;) { e.preventDefault(); this.selectedDeleteButton = (this.selectedDeleteButton === &#39;cancel&#39;) ? &#39;confirm&#39; : &#39;cancel&#39;; this.renderDeleteButtons(); }
+                    else if (e.key === &#39;Enter&#39;) { e.preventDefault(); this.handleDeleteConfirmation(); }
+                    else if (e.key === &#39;Escape&#39;) { e.preventDefault(); this.closeDeletePrompt(); }
+                    return;
+                }
+                if (this.boardSwitcherOpen) {
+                    if (e.key === &#39;ArrowRight&#39;) { e.preventDefault(); this.selectedBoardIndex = (this.selectedBoardIndex + 1) % (this.boards.length + 1); this.renderBoardList(); }
+                    else if (e.key === &#39;ArrowLeft&#39;) { e.preventDefault(); this.selectedBoardIndex = (this.selectedBoardIndex - 1 + (this.boards.length + 1)) % (this.boards.length + 1); this.renderBoardList(); }
+                    else if (e.key === &#39;Enter&#39;) {
+                        e.preventDefault();
+                        if (this.selectedBoardIndex === this.boards.length) this.openPrompt();
+                        else { this.switchBoard(this.boards[this.selectedBoardIndex].id); this.toggleBoardSwitcher(); }
+                    }
+                    else if (e.key === &#39;Escape&#39;) { e.preventDefault(); this.toggleBoardSwitcher(); }
+                    else if (isMod &amp;&amp; (e.key === &#39;Delete&#39; || e.key === &#39;Backspace&#39;)) { e.preventDefault(); this.openDeleteBoardPrompt(); }
+                    return;
+                }
+                if (isMod &amp;&amp; (e.key === &#39;Delete&#39; || e.key === &#39;Backspace&#39;)) { e.preventDefault(); this.deleteActiveItem(); return; }
+                if (isMod &amp;&amp; e.key === &#39;Enter&#39;) { e.preventDefault(); const cx = -this.camera.x + (window.innerWidth / 2) - 225, cy = -this.camera.y + (window.innerHeight / 2) - 80; this.createCard(&#34;&#34;, cx, cy); return; }
+                if (isMod &amp;&amp; e.key === &#39;k&#39;) { e.preventDefault(); this.togglePalette(true); return; }
+                if (isMod &amp;&amp; e.key === &#39;/&#39;) { e.preventDefault(); this.toggleBoardSwitcher(); return; }
+                if ([&#39;ArrowUp&#39;, &#39;ArrowDown&#39;, &#39;ArrowLeft&#39;, &#39;ArrowRight&#39;].includes(e.key) &amp;&amp; !this.slashMenuOpen &amp;&amp; !this.isExploring) {
+                    if (e.key === &#39;ArrowRight&#39; &amp;&amp; this.activeStackTag) { e.preventDefault(); this.isExploring = true; this.selectedStackCardIndex = 0; this.render(); return; }
+                    this.navigateSpatial(e.key);
+                }
+                if (this.isExploring &amp;&amp; this.activeStackTag) {
+                    if (e.key === &#39;ArrowLeft&#39; || e.key === &#39;Escape&#39;) { e.preventDefault(); this.exitExploring(); }
+                    else if (e.key === &#39;ArrowDown&#39;) { e.preventDefault(); const s = this.getStacks()[this.activeStackTag]; if (s) { this.selectedStackCardIndex = (this.selectedStackCardIndex + 1) % s.length; this.renderStackSidebar(); } }
+                    else if (e.key === &#39;ArrowUp&#39;) { e.preventDefault(); const s = this.getStacks()[this.activeStackTag]; if (s) { this.selectedStackCardIndex = (this.selectedStackCardIndex - 1 + s.length) % s.length; this.renderStackSidebar(); } }
+                }
+            },
+
+            deleteActiveItem() {
+                if (this.isExploring &amp;&amp; this.activeStackTag) {
+                    const s = this.getStacks();
+                    const group = s[this.activeStackTag];
+                    if (group &amp;&amp; group[this.selectedStackCardIndex]) {
+                        const id = group[this.selectedStackCardIndex].id;
+                        this.deleteCard(id);
+                        const ns = this.getStacks();
+                        if (!ns[this.activeStackTag] || ns[this.activeStackTag].length &lt;= 1) this.exitExploring();
+                        else { this.selectedStackCardIndex = Math.max(0, this.selectedStackCardIndex - 1); this.renderStackSidebar(); }
+                    }
+                    return;
+                }
+                if (this.activeStackTag) this.openDeleteStackPrompt();
+                else if (this.activeId) this.deleteCard(this.activeId);
+            },
+
+            navigateSpatial(key) {
+                const cur = this.activeId; if (!cur) return;
+                const s = this.getStacks(), stackedIds = new Set(); Object.values(s).forEach(g =&gt; g.forEach(x =&gt; stackedIds.add(x.id)));
+                const anchors = []; Object.entries(s).forEach(([t, g]) =&gt; anchors.push({ id: t, x: g[0].x, y: g[0].y }));
+                this.cards.filter(x =&gt; !stackedIds.has(x.id)).forEach(x =&gt; anchors.push({ id: x.id, x: x.x, y: x.y }));
+                const src = anchors.find(x =&gt; x.id === cur); if (!src) return;
+                const filtered = anchors.filter(x =&gt; x.id !== cur); filtered.sort((a, b) =&gt; Math.hypot(a.x - src.x, a.y - src.y) - Math.hypot(b.x - src.x, b.y - src.y));
+                const next = filtered.find(a =&gt; {
+                    if (key === &#39;ArrowUp&#39;) return a.y &lt; src.y - 40; if (key === &#39;ArrowDown&#39;) return a.y &gt; src.y + 40;
+                    if (key === &#39;ArrowLeft&#39;) return a.x &lt; src.x - 100; if (key === &#39;ArrowRight&#39;) return a.x &gt; src.x + 100;
+                });
+                if (next) this.focusItem(next.id);
+            },
+
+            exportData() {
+                const d = JSON.stringify({ boards: this.boards, currentBoardId: this.currentBoardId }), b = new Blob([d], { type: &#39;application/json&#39; });
+                const a = document.createElement(&#39;a&#39;); a.href = URL.createObjectURL(b); a.download = &#39;jotter-backup.json&#39;; a.click();
+            },
+
+            importData() {
+                const i = document.createElement(&#39;input&#39;); i.type = &#39;file&#39;;
+                i.onchange = (e) =&gt; {
+                    const r = new FileReader(); r.onload = (re) =&gt; {
+                        const data = JSON.parse(re.target.result); this.boards = data.boards; this.currentBoardId = data.currentBoardId;
+                        this.save(); this.loadCurrentBoard(); this.render();
+                    }; r.readAsText(e.target.files[0]);
+                }; i.click();
+            }
+        };
+
+        state.init();
+    </script>
+    <script type="module">
+      import &#39;@/index&#39;;
+    </script>
+  </body>
+</html>
